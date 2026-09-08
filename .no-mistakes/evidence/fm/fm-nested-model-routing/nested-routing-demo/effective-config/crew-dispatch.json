@@ -1,0 +1,12 @@
+{
+  "rules": [
+    {
+      "when": "The worker delegates a risky nested refactor.",
+      "use": [
+        { "harness": "claude", "model": "claude-sonnet-5", "effort": "high" },
+        { "harness": "codex", "model": "gpt-5.5", "effort": "high" }
+      ],
+      "why": "Firstmate must resolve this array from current quota evidence."
+    }
+  ]
+}
