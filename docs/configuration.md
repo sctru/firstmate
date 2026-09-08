@@ -517,6 +517,16 @@ The resolver sends the key to `curl` only as a header read from a file descripto
 The resolver fixes the endpoint at `https://api.typesafe.ai`, model at `jev-latest`, confidence floor at 0.6, and request timeout at 5 seconds; `TYPESAFE_API_KEY` is its only resolver-specific environment setting.
 The live rule-match evidence is recorded in [`verification/dispatch-resolve.md`](verification/dispatch-resolve.md).
 
+### Nested delegation
+
+When active, `config/crew-dispatch.json` is also the current authority for every worker's model and effort selection at every delegation depth.
+Before a crewmate creates a native child agent, it must classify the child task against the same rules or default and explicitly apply the complete selected profile: its configured harness, model, and effort, with an omitted model or effort fixed to the selected harness's default rather than inherited or improvised from the parent session.
+Profile arrays retain their normal `quota-array-dispatch` selection procedure at every depth.
+The worker may create the native child only when that facility can represent the complete selection; otherwise it must report the mismatch to Firstmate so the child can be routed through the fleet lifecycle.
+No legacy Fable/Opus/Sonnet/Haiku tier policy may choose a child profile, but a model explicitly selected by the active configuration remains authoritative even when its name contains one of those words.
+`fm-spawn.sh` enforces explicit resolved profiles only for fleet crewmate and scout spawns.
+Firstmate cannot intercept every third-party native child-agent tool, so ship and scout briefs carry this as an explicit worker requirement rather than claiming runtime enforcement outside the fleet lifecycle.
+
 ## Toolchain
 
 On session start the first mate detects what its required toolchain is missing or too old and lists each problem with either an exact install command or manual instructions.
