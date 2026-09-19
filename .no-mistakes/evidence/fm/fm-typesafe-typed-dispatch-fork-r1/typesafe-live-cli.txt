@@ -1,0 +1,46 @@
+TypeSafe typed-dispatch live CLI evidence
+========================================
+
+[1] Opt-out with no key
+exit=0
+stdout=
+stderr=dispatch-resolve: off (TYPESAFE_API_KEY absent from the environment and <isolated>/home/.env)
+
+[2] Malformed rules stop before network
+exit=2
+stdout=
+stderr=error: malformed rules file: <isolated>/home/config/crew-dispatch.json - approval must be "captain" when present
+curl_execs=0
+
+[3] Enabled resolver against the real TypeSafe endpoint with an intentionally invalid dummy key
+exit=0
+elapsed_ms=236
+stdout=dispatch-resolve:
+  status: error
+  reason: http 401 after 196 ms: {"detail":{"error_type":"authentication_error","message":"Cannot authenticate with the server. Please check your API key and try again."}}
+stderr_without_shell_trace=dispatch-resolve: error (http 401 after 196 ms: {"detail":{"error_type":"authentication_error","message":"Cannot authenticate with the server. Please check your API key and try again."}})
+curl_execs=1
+shell_trace_contains_dummy_key=no
+child_exec_contains_dummy_key=0
+curlrc_trace_created=no
+
+[4] .env activation under xtrace + allexport
+exit=0
+stdout=dispatch-resolve:
+  status: error
+  reason: http 401 after 185 ms: {"detail":{"error_type":"authentication_error","message":"Cannot authenticate with the server. Please check your API key and try again."}}
+shell_trace_contains_dummy_key=no
+child_exec_contains_dummy_key=0
+
+[5] Bootstrap typed validation from .env under xtrace + allexport
+exit=0
+typed_validation=CREW_DISPATCH: invalid config/crew-dispatch.json - approval must be "captain" when present
+shell_trace_contains_dummy_key=no
+child_exec_contains_dummy_key=0
+
+[6] Enabled but no written rules
+exit=0
+stdout=dispatch-resolve:
+  status: escalate
+  reason: no rules to match
+stderr=
