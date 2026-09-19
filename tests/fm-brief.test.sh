@@ -446,7 +446,7 @@ test_ship_project_memory_wording() {
 }
 
 test_nested_delegation_model_routing_contract() {
-  local home id brief kind routing_config quota_skill harness_policy crew_harness_config override_config override_routing_config override_crew_harness_config
+  local home id brief kind routing_config quota_skill harness_policy crew_harness_config override_config override_routing_config override_crew_harness_config baseline_harness
   local CLAUDECODE=1 CURSOR_AGENT='' CURSOR_INVOKED_AS='' GEMINI_CLI='' ATLASSIAN_AGENT_TYPE='' ROVODEV_CLI=''
   local FM_OMP_HARNESS='' PI_CODING_AGENT='' FM_PI_HARNESS='' GROK_AGENT=''
   export CLAUDECODE CURSOR_AGENT CURSOR_INVOKED_AS GEMINI_CLI ATLASSIAN_AGENT_TYPE ROVODEV_CLI
@@ -458,6 +458,7 @@ test_nested_delegation_model_routing_contract() {
   crew_harness_config="\`$home/config/crew-harness\`"
   quota_skill="\`$ROOT/.agents/skills/quota-array-dispatch/SKILL.md\`"
   harness_policy="\`$ROOT/AGENTS.md\` section 4"
+  baseline_harness=$(FM_HOME="$home" FM_CONFIG_OVERRIDE="$home/config" "$ROOT/bin/fm-harness.sh")
 
   for kind in ship scout; do
     id="brief-nested-routing-$kind"
@@ -489,7 +490,7 @@ test_nested_delegation_model_routing_contract() {
       "$kind brief omitted the current static-harness fallback"
     assert_grep "A current concrete adapter in that file may be used only if $harness_policy verifies it for crewmates or scouts" "$brief" \
       "$kind brief froze the concrete static-harness fallback"
-    assert_grep "If the file is absent, empty, or \`default\`, use the captured Firstmate baseline \`claude\` with that harness" "$brief" \
+    assert_grep "If the file is absent, empty, or \`default\`, use the captured Firstmate baseline \`$baseline_harness\` with that harness" "$brief" \
       "$kind brief omitted the captured baseline for an unset static harness"
     assert_grep 'If the current value is unverified, report that exact value to Firstmate and use the captured baseline instead.' "$brief" \
       "$kind brief did not report and replace an unverified static harness"
@@ -526,7 +527,7 @@ test_nested_delegation_model_routing_contract() {
     "ship brief ignored FM_CONFIG_OVERRIDE for nested routing"
   assert_grep "read $override_crew_harness_config at child intake" "$brief" \
     "ship brief did not read the overridden static fallback at child intake"
-  assert_grep "use the captured Firstmate baseline \`claude\` with that harness" "$brief" \
+  assert_grep "use the captured Firstmate baseline \`$baseline_harness\` with that harness" "$brief" \
     "ship brief omitted the Firstmate baseline from overridden routing"
   assert_no_grep "resolved selection is \`codex\`" "$brief" \
     "ship brief froze the original static harness at generation time"
