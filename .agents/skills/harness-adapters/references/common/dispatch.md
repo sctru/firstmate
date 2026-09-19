@@ -7,7 +7,7 @@ Load this with the selected tool reference for dispatch, start, or adapter verif
 Use the router's detection and safety sections for static crew and secondmate harness resolution and all explicit overrides.
 `config/crew-dispatch.json` can override that static default for one crewmate or scout with concrete harness, model, and effort axes.
 For a profile array, load `quota-array-dispatch` after establishing harness and provider facts here.
-When the opt-in `bin/fm-dispatch-resolve.sh` is on, use its inspectable rule match as advisory evidence, then resolve concrete axes through the normal catalog, authentication, reasoning-class, quota, and approval gates; `docs/configuration.md` "Typed dispatch resolution" owns that contract.
+When the opt-in `bin/fm-dispatch-resolve.sh` is on, its `clear` answer already names the concrete axes; `docs/configuration.md` "Typed dispatch resolution" owns that contract.
 
 `../secondmate-provisioning/SKILL.md` owns inherited local material.
 Its harness consequence is that a secondmate's workers receive literal `config/crew-harness` and `config/crew-dispatch.json`, while the primary-only `config/secondmate-harness` is never inherited because secondmates do not spawn secondmates.
@@ -18,7 +18,8 @@ The inherited dispatch file applies the same best-fit profiles there.
 ## Owners
 
 `../../../bin/fm-spawn.sh` owns launch, autonomy, concrete flags, task-kind compatibility, and worker turn-end wiring.
-Natural-language rules stay with firstmate, while scripts receive concrete axes.
+Natural-language rules stay with firstmate for fleet intake, while a worker classifies its native child under the generated nested-routing contract and routes any matched profile array back to Firstmate for resolution.
+Scripts receive concrete axes.
 
 `../../../bin/fm-busy-lib.sh` owns semantic busy trust.
 Composer shapes, glyphs, placeholders, popups, rendered delivery signals, and the `empty` / `pending` / `pending-unproven` / `unknown` decision belong only to `../../../bin/fm-composer-lib.sh`.
