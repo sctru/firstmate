@@ -1789,6 +1789,7 @@ SH
 test_self_announced_close_after_open_decisions_fold_does_not_rewake() {
   local dir state fakebin out status_file pid rc
   dir=$(make_case self-close-after-fold); state="$dir/state"; fakebin="$dir/fakebin"; out="$dir/watch.out"
+  fm_write_meta "$state/task.meta" "window=sess:fm-task"
   status_file="$state/task.status"
   printf 'needs-decision [key=k1]: pick one\n' > "$status_file"
   # Session-start drain folds OPEN DECISIONS without writing a watcher seen
@@ -1823,6 +1824,7 @@ test_self_announced_close_after_open_decisions_fold_does_not_rewake() {
 test_self_announced_close_after_fold_still_surfaces_folded_worker_failure() {
   local dir state fakebin out status_file pid rc
   dir=$(make_case self-close-folded-failure); state="$dir/state"; fakebin="$dir/fakebin"; out="$dir/watch.out"
+  fm_write_meta "$state/task.meta" "window=sess:fm-task"
   status_file="$state/task.status"
   printf 'needs-decision [key=budget]: approve spend?\n' > "$status_file"
   prime_status_seen "$state" "$status_file" || fail "could not prime the announced baseline"
@@ -1915,6 +1917,7 @@ test_needs_decision_signal_payload_marked_for_branch_exclusion() {
   local dir state fakebin out status_file pid
   dir=$(make_case needs-decision-payload); state="$dir/state"; fakebin="$dir/fakebin"
   out="$dir/watch.out"
+  fm_write_meta "$state/task.meta" "window=sess:fm-task"
   status_file="$state/task.status"
   printf 'working: setup\nneeds-decision: pick A or B\n' > "$status_file"
   watch_bg "$state" "$fakebin" "$out"
@@ -1934,6 +1937,7 @@ test_needs_decision_reconciliation_required_still_marked() {
   local dir state fakebin out status_file pid
   dir=$(make_case needs-decision-reconciliation); state="$dir/state"; fakebin="$dir/fakebin"
   out="$dir/watch.out"
+  fm_write_meta "$state/task.meta" "window=sess:fm-task"
   status_file="$state/task.status"
   printf 'needs-decision [key=pending-reply-x]: unrelated request\nworking: awaiting reconciliation\n' \
     > "$status_file"
@@ -1952,6 +1956,7 @@ test_captain_held_signal_payload_marked_for_branch_exclusion() {
   local dir state fakebin out status_file pid
   dir=$(make_case captain-held-signal-payload); state="$dir/state"; fakebin="$dir/fakebin"
   out="$dir/watch.out"
+  fm_write_meta "$state/task.meta" "window=sess:fm-task"
   status_file="$state/task.status"
   printf 'captain-held [key=route]: awaiting the captain\n' > "$status_file"
   export FM_FAKE_CREW_STATE='state: working · source: run-step · still wrapping up'
@@ -1969,6 +1974,7 @@ test_pending_reply_escalation_signal_payload_marked_for_branch_exclusion() {
   local dir state fakebin out status_file pid corr
   dir=$(make_case pending-reply-escalation-payload); state="$dir/state"; fakebin="$dir/fakebin"
   out="$dir/watch.out"
+  fm_write_meta "$state/task.meta" "window=sess:fm-task"
   status_file="$state/task.status"
   corr=0123456789abcdef
   printf 'blocked [key=pending-reply-%s]: pending-reply-missed: task=task pending-reply-id=%s request=finish report\n' \
@@ -1985,6 +1991,7 @@ test_ordinary_blocked_signal_payload_remains_branch_eligible() {
   local dir state fakebin out status_file pid
   dir=$(make_case ordinary-blocked-payload); state="$dir/state"; fakebin="$dir/fakebin"
   out="$dir/watch.out"
+  fm_write_meta "$state/task.meta" "window=sess:fm-task"
   status_file="$state/task.status"
   printf 'blocked [key=dependency]: waiting for an upstream release\n' > "$status_file"
   watch_bg "$state" "$fakebin" "$out"
@@ -2004,6 +2011,7 @@ test_routine_signal_payload_not_marked_needs_decision() {
   local dir state fakebin out status_file pid
   dir=$(make_case routine-signal-payload); state="$dir/state"; fakebin="$dir/fakebin"
   out="$dir/watch.out"
+  fm_write_meta "$state/task.meta" "window=sess:fm-task"
   status_file="$state/task.status"
   printf 'working: setup\ndone: migration complete ; needs-decision: documented in follow-up\n' > "$status_file"
   watch_bg "$state" "$fakebin" "$out"
@@ -2076,6 +2084,7 @@ test_routine_appends_after_a_classified_event_stay_absorbed() {
   local dir state fakebin out status_file sig pid
   dir=$(make_case actionable-classified); state="$dir/state"; fakebin="$dir/fakebin"
   out="$dir/watch.out"
+  fm_write_meta "$state/task.meta" "window=sess:fm-task"
   status_file="$state/task.status"
   # The decision is BEHIND the classified position, so only the new routine line
   # is in the span. A supervisor that re-read the whole log would wake again here.
@@ -4904,6 +4913,7 @@ test_terminal_first_sight_drops_a_finished_write_deferral_chain() {
 test_triage_log_size_cap_accepts_spaced_wc_counts() {
   local dir state fakebin out status_file pid lines i
   dir=$(make_case triage-log-spaced-wc); state="$dir/state"; fakebin="$dir/fakebin"; out="$dir/watch.out"
+  fm_write_meta "$state/task.meta" "window=sess:fm-task"
   i=1
   while [ "$i" -le 3000 ]; do
     printf 'old line %04d\n' "$i" >> "$state/.watch-triage.log"
@@ -5436,6 +5446,7 @@ test_heartbeat_backstop_never_surfaces_an_orphan_status() {
 test_beacon_stays_fresh_while_absorbing() {
   local dir state fakebin out status_file pid m1 m2 now
   dir=$(make_case beacon-fresh); state="$dir/state"; fakebin="$dir/fakebin"; out="$dir/watch.out"
+  fm_write_meta "$state/task.meta" "window=sess:fm-task"
   status_file="$state/task.status"
   printf 'working: a\n' > "$status_file"
   # Provably working so the working: notes are absorbed (the path that must keep the
