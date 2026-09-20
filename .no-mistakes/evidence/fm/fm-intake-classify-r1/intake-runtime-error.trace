@@ -1,0 +1,2 @@
++ set +x
+intake-classify: error (temporary file setup failed)

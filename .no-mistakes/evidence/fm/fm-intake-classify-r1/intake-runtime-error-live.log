@@ -1,0 +1,11 @@
+$ TYPESAFE_API_KEY=<synthetic-key> TMPDIR=<missing-dir> bash -x bin/fm-intake-classify.sh intake-request.md --project firstmate
+exit: 0
+secret-present-in-trace: no
+network-syscalls (strace -f -e trace=network): 0
+stdout:
+  intake-classify:
+    status: error
+    reason: temporary file setup failed
+stderr/trace:
+  + set +x
+  intake-classify: error (temporary file setup failed)

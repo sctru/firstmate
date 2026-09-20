@@ -1,0 +1,11 @@
+4009695 +++ exited with 0 +++
+4009694 --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=4009695, si_uid=1000, si_status=0, si_utime=0, si_stime=0} ---
+4009694 +++ exited with 0 +++
+4009693 --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=4009694, si_uid=1000, si_status=0, si_utime=0, si_stime=0} ---
+4009696 +++ exited with 0 +++
+4009693 --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=4009696, si_uid=1000, si_status=0, si_utime=0, si_stime=0} ---
+4009698 +++ exited with 1 +++
+4009697 --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=4009698, si_uid=1000, si_status=1, si_utime=0, si_stime=0} ---
+4009697 +++ exited with 1 +++
+4009693 --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=4009697, si_uid=1000, si_status=1, si_utime=0, si_stime=0} ---
+4009693 +++ exited with 0 +++

@@ -1,0 +1,6 @@
+$ env -u TYPESAFE_API_KEY FM_HOME=<empty-home> bin/fm-intake-classify.sh intake-request.md --project firstmate
+exit: 0
+stdout-bytes: 0
+stderr:
+  intake-classify: off
+network-syscalls (strace -f -e trace=network): 0
