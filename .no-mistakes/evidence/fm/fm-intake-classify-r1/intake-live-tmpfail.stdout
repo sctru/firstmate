@@ -1,0 +1,3 @@
+intake-classify:
+  status: error
+  reason: temporary file setup failed
