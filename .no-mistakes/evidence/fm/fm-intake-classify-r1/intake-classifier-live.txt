@@ -1,0 +1,32 @@
+SCENARIO: classifier is opt-in and inert when unconfigured
+exit: 0
+stdout-bytes: 0
+stderr: intake-classify: off 
+network-syscalls: 0
+home-created-files: 0
+
+SCENARIO: live API rejection remains nonblocking and creates no work
+exit: 0
+stdout:
+intake-classify:
+  status: error
+  reason: http 401 after 186 ms: {"detail":{"error_type":"authentication_error","message":"Cannot authenticate with the server. Please check your API key and try again."}}
+stderr:
+intake-classify: error (http 401 after 186 ms: {"detail":{"error_type":"authentication_error","message":"Cannot authenticate with the server. Please check your API key and try again."}})
+home-created-files: 0
+
+SCENARIO: shell tracing is disabled before credential reads
+exit: 0
+synthetic-key-in-trace: no
+trace-first-line: + set +x
+result-status: status: error
+
+SCENARIO: bearer value is absent from executed command arguments
+exit: 0
+synthetic-key-in-exec-trace: no
+curl-exec: 123161 execve("/usr/bin/curl", ["curl", "-q", "-sS", "--max-time", "5", "-o", "/tmp/tmp.Si7CofPMDc", "-w", "%{http_code}", "-X", "POST", "https://api.typesafe.ai/v1/systemone", "-H", "Content-Type: application/json", "-H", "@/dev/fd/3", "--data-binary", "@-"], <environment>) = 0
+
+SCENARIO: bearer value is absent from the curl child environment
+exit: 0
+curl-exec-count: 1
+synthetic-key-in-curl-child-environment: no

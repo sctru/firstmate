@@ -1,0 +1,9 @@
+101567 +++ exited with 0 +++
+101563 --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=101567, si_uid=1000, si_status=0, si_utime=0, si_stime=0} ---
+101563 +++ exited with 0 +++
+101560 --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=101563, si_uid=1000, si_status=0, si_utime=0, si_stime=0} ---
+101579 +++ exited with 0 +++
+101560 --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=101579, si_uid=1000, si_status=0, si_utime=0, si_stime=0} ---
+101580 +++ exited with 0 +++
+101560 --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=101580, si_uid=1000, si_status=0, si_utime=0, si_stime=0} ---
+101560 +++ exited with 0 +++
