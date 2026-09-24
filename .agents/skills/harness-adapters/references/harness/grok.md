@@ -31,9 +31,10 @@ Old Herdr logic treated any pane delta as submission, including popup closure an
 Tmux and Herdr now route captures through `../../../bin/fm-composer-lib.sh`, which classifies real text on every proven content row.
 `../../../docs/herdr-backend.md` owns the boundary and `../../../tests/fm-backend-herdr.test.sh` covers it.
 
-The "Run Grok Build in a project directory?" picker appears only outside a project, such as home, Desktop, Downloads, or `/tmp`.
-The spawn starts in the isolated git root, so Grok trusts it and needs no key.
-For unavoidable non-project launch, `[hints] project_picker_disabled = true` in `~/.grok/config.toml` suppresses the picker.
+As of Grok Build 1.0.34 (verified 2026-09-24), a first launch into an untrusted folder shows `Do you trust the contents of this directory?` with `Grok Build may run or modify contents in this directory`, naming the primary project clone path (the worktree's git common-dir owner) rather than the worktree itself.
+Choices are `Yes, proceed  y` (default, highlighted) and `No, quit  n`; Enter accepts Yes and the grant persists in `~/.grok/trusted_folders.toml`.
+`bin/fm-spawn.sh`'s post-launch trust check matches both lines and sends Enter so a fresh worker is not parked on that dialog.
+Older versions only showed the "Run Grok Build in a project directory?" picker outside a project (home, Desktop, Downloads, `/tmp`) and needed no key when the spawn started in an isolated git root; `[hints] project_picker_disabled = true` in `~/.grok/config.toml` still suppresses that older picker.
 
 ## Composer
 

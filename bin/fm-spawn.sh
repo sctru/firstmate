@@ -3687,6 +3687,9 @@ spawn_trust_prompt_signature() {  # <harness> -> required grep -F line(s), one p
     claude*) printf '%s\n' 'Is this a project you created or one you trust?' 'No, exit' ;;
     # references/harness/codex.md
     codex) printf '%s\n' 'Do you trust the contents of this directory?' ;;
+    # references/harness/grok.md: Grok 1.0.34 shares Codex's first line, so
+    # require the Grok-only second line too (harness-keyed; cannot shadow Codex).
+    grok) printf '%s\n' 'Do you trust the contents of this directory?' 'Grok Build may run or modify contents in this directory' ;;
   esac
 }
 
@@ -3697,6 +3700,8 @@ spawn_trust_prompt_remedy() {  # <harness> -> key(s) to send in order, one per l
     claude*) printf '%s\n' Down Enter ;;
     # codex.md: "Accept it with Enter and verify the instructions begin processing."
     codex) printf '%s\n' Enter ;;
+    # grok.md: default "Yes, proceed" is highlighted; Enter accepts (1.0.34).
+    grok) printf '%s\n' Enter ;;
   esac
 }
 
