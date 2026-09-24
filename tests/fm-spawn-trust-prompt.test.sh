@@ -108,9 +108,12 @@ EOF
 run_trust_spawn() {
   local id=$1 harness=$2 dialog_calls=$3 dialog_text=$4 clear_text=$5 \
     detect_polls=${6:-3} clear_polls=${7:-3}
+  # GROK_HOME isolates grok's global turn-end hook writes away from the
+  # developer's real ~/.grok; unused by every other harness in this suite.
   FM_ROOT_OVERRIDE='' FM_HOME="$HOME_DIR" \
     FM_STATE_OVERRIDE="$HOME_DIR/state" FM_DATA_OVERRIDE="$HOME_DIR/data" \
     FM_PROJECTS_OVERRIDE="$HOME_DIR/projects" FM_CONFIG_OVERRIDE="$HOME_DIR/config" \
+    GROK_HOME="$HOME_DIR/grok-home" \
     FM_SPAWN_NO_GUARD=1 TMUX="fake,1,0" \
     FM_FAKE_PANE_PATH="$WT_DIR" \
     FM_FAKE_CAPTURE_COUNTFILE="$COUNTFILE" \
@@ -199,6 +202,28 @@ test_codex_dialog_clears_on_single_enter() {
   pass "a codex trust dialog clears on its own single-Enter remedy"
 }
 
+GROK_DIALOG='Do you trust the contents of this directory?
+❯ Yes, proceed  y
+  No, quit  n
+Grok Build may run or modify contents in this directory'
+
+# Grok 1.0.34 shares Codex's first trust line, so its signature requires the
+# Grok-only second line too; remedy is still a single Enter on the default Yes.
+test_grok_dialog_clears_on_single_enter() {
+  local rec id out status
+  id=trust-grok-clears-z6
+  rec=$(make_trust_case grok-clears "$id")
+  read_trust_record "$rec"
+
+  out=$(run_trust_spawn "$id" grok 1 "$GROK_DIALOG" 'ready to work')
+  status=$?
+  expect_code 0 "$status" "spawn should succeed once the grok trust dialog clears"
+  assert_contains "$out" "spawned $id" "spawn did not report success"
+  assert_grep 'Enter' "$KEYLOG" "grok's remedy should send Enter on the default Yes, proceed"
+  assert_no_grep 'Down' "$KEYLOG" "grok's remedy is Enter only - Down would be claude's key, not grok's"
+  pass "a grok trust dialog clears on its own single-Enter remedy"
+}
+
 # Pi has no verified match string (harness-adapters pi.md), so the check must
 # neither guess at a signature nor silently skip the harness: it prints the
 # documented fallback reminder and lets the spawn proceed.
@@ -220,6 +245,7 @@ test_claude_dialog_clears_on_remedy
 test_claude_dialog_persists_fails_loud
 test_no_dialog_baseline_succeeds_without_remedy
 test_codex_dialog_clears_on_single_enter
+test_grok_dialog_clears_on_single_enter
 test_pi_with_no_signature_prints_reminder
 
 echo "# all fm-spawn-trust-prompt tests passed"
