@@ -4,6 +4,7 @@ description: >-
   Agent-only reference for changing firstmate's shared, tracked material per AGENTS.md section 1.
   Use before editing any of that material, whether working as firstmate directly or as a crewmate briefed on a firstmate-repo task.
   Covers the knowledge-placement decision tree, the one-owner rule for contracts, the inline-stub pattern for content moved into a skill, AGENTS.md size discipline, trigger hygiene for new skills, and repo style rules (one sentence per line, plain dash, no agent co-author, shellcheck-clean bin scripts, colocated tests, and maintainer-verification evidence).
+  Also load before routing durable knowledge or updating project memory.
 user-invocable: false
 metadata:
   internal: true
@@ -37,6 +38,21 @@ Before writing a new fact anywhere in this repo, ask where it belongs, in this o
 Stop at the first tier that answers yes.
 Do not place a fact at a more convenient tier than the one this tree gives you.
 The machine-consumed inventory in [`docs/documentation-audiences.json`](../../../docs/documentation-audiences.json) is the single classification owner for maintained prose surfaces; do not add parallel front matter or a second audience list.
+
+## Durable knowledge routing extracted from AGENTS.md
+
+Route durable knowledge to its most specific owner:
+
+- Home-domain captain preferences and working style belong in `data/captain.md` after inspect-then-update.
+- Captain preferences shared across secondmate domains belong in the primary home's `data/captain-shared.md` under the `secondmate-provisioning` contract.
+- Fleet-local operational facts belong in curated, home-local `data/learnings.md`.
+- Task-scoped notes belong with the backlog item, and investigation findings belong in the scout report.
+- Knowledge useful to almost every contributor to one project belongs in that project's committed `AGENTS.md`.
+- Knowledge general to every firstmate user belongs in this repo's shared tracked surface.
+
+Firstmate never writes a project's `AGENTS.md` directly.
+A crewmate creates or updates it lazily through the project's selected delivery path, using `bin/fm-ensure-agents-md.sh` and preferring pointers to authoritative sources over copied detail.
+Keep fleet delivery posture and captain-private strategy out of project memory.
 
 ## One-owner rule
 
@@ -112,6 +128,11 @@ Move or delete evidence only after the current owner and regression pointer are 
 After all documentation, review-fix, and lint-fix commits, review the complete branch diff again against those criteria rather than reviewing only the latest commit.
 Run `bin/fm-doc-audience-check.sh`; it enforces classification, README setup routing, local link targets, and owner pointers without keyword-linting legitimate evidence prose.
 
+## Verification cadence
+
+Batch all intended edits before focused verification, then run the focused check only after no further fix is planned unless its result is needed to choose the implementation.
+Before executing a multi-line evidence command, run a minimal syntax and variable-reference dry run.
+
 ## No-mistakes test configuration
 
 Never configure a deterministic suite-walk `commands.test` in any repository's no-mistakes config, whether it selects the full suite, changed tests, a family, or a fixed script list.
@@ -132,3 +153,14 @@ Firstmate PR #3644 demonstrated the cost: pinning a 75-162-script walk took 32.7
 - A maintainer-verification record under `docs/verification/` records active empirical facts, not assumptions or task chronology.
 - Include the date, version, exact commands run, and exact output needed to support the current guarantee.
 - Keep incident chronology and delivery evidence in private task reports or PR evidence unless a concise rationale is required to maintain a current safety boundary.
+
+## Agent-only index entry extracted from AGENTS.md
+
+- `firstmate-coding-guidelines` - load before changing firstmate's shared, tracked material, as defined by section 1's list, whether editing directly or briefing a crewmate for a firstmate-repo task.
+
+## Maintaining this file
+
+Keep this file for knowledge useful to almost every future agent session in this project.
+Do not repeat what the codebase already shows; point to the authoritative file, skill, command, or doc.
+Prefer rewriting or pruning existing entries over appending new ones.
+When updating this file, preserve every safety boundary and keep the always-loaded contract concise.

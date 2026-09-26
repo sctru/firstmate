@@ -1,10 +1,6 @@
 ---
 name: ask-user-authority
-description: >-
-  Agent-only decision procedure for ask-user findings.
-  Use before deciding any ask-user finding.
-  This skill is the single owner of finding-decision policy: firstmate always applies judgment, decides findings that are unambiguous toward accepted intent, and escalates only genuinely ambiguous, expanding, or destructive ones.
-  Finding authority is this skill's criteria, not the project's yolo posture.
+description: Load before proposing any ask-user finding; ask only for genuinely ambiguous, expanding, destructive, or materially undisclosed operations, and decide unambiguous in-scope findings.
 user-invocable: false
 metadata:
   internal: true
@@ -55,3 +51,7 @@ Do not relay reviewer labels or gate output as if they settled the decision.
 - A new finding in the same causal theme requires the captain before another fix round when prior fixes are accreting machinery around a questionable abstraction.
 - A genuinely security-sensitive action requires the captain under the stronger existing boundary even if it is otherwise within scope.
 - Complex architecture explicitly requested by the captain stays within scope and does not escalate merely because it is complex.
+
+## Agent-only index entry extracted from AGENTS.md
+
+- `ask-user-authority` - load before deciding any ask-user finding.

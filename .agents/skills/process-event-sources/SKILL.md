@@ -151,3 +151,8 @@ Say these boundaries plainly wherever the behavior is described.
 
 A wake is not news by itself.
 Report what the source actually produced and what it changes, never the event line, the result path, or the runner.
+
+## Agent-only index entry extracted from AGENTS.md
+
+- `process-event-sources` - load before arming a long-polling source, before registering a deterministic condition->action watch (do X as soon as Y is true), on any `procevent <adapter> <source-id> <sequence>` check wake, and on any `process-event source stranded` or `process-event source failed to start` check wake.
+  Never run a registered source's blocking command yourself in a conversational turn.

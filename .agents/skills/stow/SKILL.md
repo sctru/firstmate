@@ -158,6 +158,10 @@ The offload sweep runs whenever the pass is still over budget after decay archiv
 It is an immediate reduction step for eligible non-pinned conditional material that can be added to an already-existing allowed owner, not a deferred proposal that leaves the pass over budget.
 Every test must hold for a candidate:
 
+
+## Trigger and scope extracted from AGENTS.md
+
+When the captain invokes `/stow`, load the `stow` skill for its memory curation, knowledge routing, and persistence of the open work records this session is holding; it files and corrects only the open work that session is holding, and never reconciles the backlog against repository or PR reality.
 - Editable source: this home owns the memory file and may relocate the entry; a read-only shared entry is routed to its primary owner instead.
 - Durable: not `perishable`, not stale, and expected to remain true for months.
 - Eligible by authority: only a non-pinned, dated `aging` entry that is not pending offload may be autonomously relocated to an already-existing allowed owner, while a `pinned` entry may be proposed only for explicit, per-item captain-approved relocation and can never be archived or autonomously offloaded for budget relief.

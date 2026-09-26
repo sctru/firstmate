@@ -47,7 +47,12 @@ Compare the final explanation against the proven path and show why the proposed 
 
 A diagnosis brief should ask for the reproduction, trigger/mask/symptom separation, divergent and proven path comparison, relevant history, smallest counterfactual, and disconfirming evidence in the report.
 A diagnostic report should distinguish observed facts from hypotheses and state any unresolved uncertainty that could change the recommended scope.
+For CI or provider failures, separate observed run status and log evidence from causal hypotheses, and verify the provider-side cause before presenting it as the diagnosis.
 Before acting on the report, verify that its claimed cause explains the end-user reproduction and the proven path without relying on an untested masking condition.
 If a load-bearing element is missing, route a focused follow-up investigation instead of treating confidence or implementation detail as proof.
 A diagnosis or implementation-ready recommendation is evidence, not authorization to change code.
 Implementation still requires the captain's request or another existing lifecycle authority, and the reproduction should become the regression test when a fix is authorized.
+
+## Agent-only index entry extracted from AGENTS.md
+
+- `diagnostic-reasoning` - load before scoping a reported bug and before acting on a diagnostic report.
