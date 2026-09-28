@@ -24,8 +24,8 @@ TMP_ROOT=$(fm_test_tmproot fm-spawn-trust-prompt)
 # make_trust_fakebin <dir> builds a fake tmux that: always reports the pane
 # already settled in the worktree (so the treehouse-get settle loop resolves
 # on its first pair of reads), answers capture-pane from a countfile-driven
-# sequence (dialog text for the first FM_FAKE_CAPTURE_DIALOG_CALLS calls,
-# clear text after), and appends every send-keys invocation to a log file so
+# sequence once the launch command has been sent (dialog text for the first
+# FM_FAKE_CAPTURE_DIALOG_CALLS post-launch calls, clear text after), and appends every send-keys invocation to a log file so
 # a test can assert exactly which keys the remedy sent.
 make_trust_fakebin() {
   local dir=$1 fakebin
@@ -40,6 +40,12 @@ case "$*" in
     ;;
   *capture-pane*)
     countfile="${FM_FAKE_CAPTURE_COUNTFILE:?FM_FAKE_CAPTURE_COUNTFILE unset}"
+    # The harness, and so its dialog, exists only after the launch command is
+    # sent; a pre-launch capture (the worktree cd check) sees a plain shell.
+    if [ ! -e "$countfile.launched" ]; then
+      printf '%s\n' '$ '
+      exit 0
+    fi
     n=0
     [ -f "$countfile" ] && n=$(cat "$countfile")
     n=$((n + 1))
@@ -55,6 +61,9 @@ esac
 case "${1:-}" in
   send-keys)
     [ -z "${FM_FAKE_SENDKEYS_LOG:-}" ] || printf '%s\n' "$*" >> "$FM_FAKE_SENDKEYS_LOG"
+    case "$*" in
+      */launch.*) : > "${FM_FAKE_CAPTURE_COUNTFILE:?}.launched" ;;
+    esac
     exit 0
     ;;
   display-message) printf 'firstmate\n'; exit 0 ;;

@@ -2018,6 +2018,7 @@ test_folded_worker_decision_without_home_append_still_wakes() {
   local dir state fakebin out status_file pid
   dir=$(make_case folded-decision-wakes); state="$dir/state"; fakebin="$dir/fakebin"; out="$dir/watch.out"
   status_file="$state/task.status"
+  fm_write_meta "$state/task.meta" "window=sess:fm-task"
   printf 'working: building\n' > "$status_file"
   prime_status_seen "$state" "$status_file" || fail "could not prime the announced baseline"
   printf 'needs-decision [key=k3]: pick a region\n' >> "$status_file"
@@ -2044,6 +2045,7 @@ test_separate_self_announced_answers_after_fold_wake_once() {
   local dir state fakebin out status_file pid rc answer
   dir=$(make_case multi-answer-fold); state="$dir/state"; fakebin="$dir/fakebin"; out="$dir/watch.out"
   status_file="$state/task.status"
+  fm_write_meta "$state/task.meta" "window=sess:fm-task"
   {
     printf 'needs-decision [key=k1]: pick REST or RPC\n'
     printf 'needs-decision [key=k2]: pick us-east or eu-west\n'
@@ -2327,6 +2329,7 @@ test_keyed_decision_signal_reads_only_the_new_span() {
   dir=$(make_case keyed-span-bound); state="$dir/state"; fakebin="$dir/fakebin"
   out="$dir/watch.out"; reads="$dir/span-reads"; reader="$dir/recording-span-reader"
   status_file="$state/task.status"
+  fm_write_meta "$state/task.meta" "window=sess:fm-task"
   i=0
   while [ "$i" -lt 60 ]; do
     i=$((i + 1))
