@@ -62,7 +62,7 @@ For a Firstmate-managed task, include an explicit status instruction:
 ```text
 Append supervisor-visible status lines to <absolute-firstmate-home>/state/<task-id>.status.
 Use only these prefixes for status changes: working:, needs-decision:, blocked:, paused:, done:, failed:.
-Use paused: only for a deliberate known external wait that should be rechecked later, never for a blocker that needs firstmate to act.
+Follow the task brief's status-reporting rule for declaring and resolving waits; bin/fm-brief.sh owns that rule.
 Before doing substantive work, append "working: Codex Desktop thread started".
 ```
 
@@ -108,7 +108,3 @@ If there is a real Firstmate task record, leave teardown decisions to the normal
 - Status file not updated: treat the thread as unsupervised until the return channel is proven.
 - Worker editing the saved project checkout instead of its Desktop cwd: stop and decide whether to salvage the branch before continuing.
 - Production `codex-app` backend request: read `docs/codex-app-backend.md` and do not invent a local adapter.
-
-## Agent-only index entry extracted from AGENTS.md
-
-- `firstmate-codexapp` - load before coordinating a visible Codex Desktop thread, evaluating a Codex App backend request, or reconciling Codex Desktop host-tool smoke evidence for Firstmate work.

@@ -4,7 +4,6 @@ description: >-
   Agent-only reference for changing firstmate's shared, tracked material per AGENTS.md section 1.
   Use before editing any of that material, whether working as firstmate directly or as a crewmate briefed on a firstmate-repo task.
   Covers the knowledge-placement decision tree, the one-owner rule for contracts, the inline-stub pattern for content moved into a skill, AGENTS.md size discipline, trigger hygiene for new skills, and repo style rules (one sentence per line, plain dash, no agent co-author, shellcheck-clean bin scripts, colocated tests, and maintainer-verification evidence).
-  Also load before routing durable knowledge or updating project memory.
 user-invocable: false
 metadata:
   internal: true
@@ -23,7 +22,7 @@ Before writing a new fact anywhere in this repo, ask where it belongs, in this o
 1. Does the firstmate AGENT need this on every session or every turn to operate?
    If yes: `AGENTS.md`, inline.
 2. Does the agent need it only in a nameable situation - a spawn, a recovery, a specific wake type, a specific lifecycle step?
-   If yes: an agent-only skill under `.agents/skills/`, plus a one-line trigger pointer left inline in `AGENTS.md` (usually section 13).
+   If yes: an agent-only skill under `.agents/skills/`, whose description states its load trigger; leave a one-line inline pointer in `AGENTS.md` only when an always-loaded rule must name the skill.
 3. Is it public product, setup, or user/operator reference?
    If yes: the surface classified for that audience in [`docs/documentation-audiences.md`](../../../docs/documentation-audiences.md), limited to current behavior, setup, supported limits, stable invariants, concise rationale, and current verification entry points.
 4. Is it contributor/maintainer architecture?
@@ -38,21 +37,6 @@ Before writing a new fact anywhere in this repo, ask where it belongs, in this o
 Stop at the first tier that answers yes.
 Do not place a fact at a more convenient tier than the one this tree gives you.
 The machine-consumed inventory in [`docs/documentation-audiences.json`](../../../docs/documentation-audiences.json) is the single classification owner for maintained prose surfaces; do not add parallel front matter or a second audience list.
-
-## Durable knowledge routing extracted from AGENTS.md
-
-Route durable knowledge to its most specific owner:
-
-- Home-domain captain preferences and working style belong in `data/captain.md` after inspect-then-update.
-- Captain preferences shared across secondmate domains belong in the primary home's `data/captain-shared.md` under the `secondmate-provisioning` contract.
-- Fleet-local operational facts belong in curated, home-local `data/learnings.md`.
-- Task-scoped notes belong with the backlog item, and investigation findings belong in the scout report.
-- Knowledge useful to almost every contributor to one project belongs in that project's committed `AGENTS.md`.
-- Knowledge general to every firstmate user belongs in this repo's shared tracked surface.
-
-Firstmate never writes a project's `AGENTS.md` directly.
-A crewmate creates or updates it lazily through the project's selected delivery path, using `bin/fm-ensure-agents-md.sh` and preferring pointers to authoritative sources over copied detail.
-Keep fleet delivery posture and captain-private strategy out of project memory.
 
 ## One-owner rule
 
@@ -69,7 +53,7 @@ That is the trigger condition for loading the skill, plus any safety-critical fa
 Everything else - the procedure, the mechanism, the surrounding detail - moves out completely.
 Do not leave a partial restatement behind "just in case".
 A partial copy is exactly the duplication the one-owner rule forbids.
-The model to copy is `AGENTS.md` section 8's "Away-mode and quiet-mode stub": it keeps only the marker format, the ownership-transfer rule, and the exit condition inline, and points everything else at the `/afk` and `/quiet` skills.
+The model to copy is `AGENTS.md` section 8's "Away-mode and quiet-mode stub": it keeps only the skill-invocation triggers inline and points everything else at the `/afk`, `/quiet`, and `away-quiet-supervision` skills.
 
 ## Size discipline
 
@@ -82,7 +66,7 @@ When in doubt, write the fact into the skill or doc first by patching that owner
 ## Trigger hygiene
 
 A new skill is dead weight if nothing loads it.
-Every new skill needs its load trigger declared inline: section 13 for agent-only reference skills, or the relevant operating section for anything else.
+Every new skill needs its load trigger declared in its description, which is the always-loaded trigger index; add an inline `AGENTS.md` pointer only in the operating section whose always-loaded rule must name it.
 State the trigger as a condition ("load before X", "load on Y wake"), never as a vague pointer.
 Briefs for tasks that touch firstmate's own tracked material should tell the crewmate to load this skill.
 `bin/fm-brief.sh`'s `REPO` argument is a caller-supplied string with no reliable signal that it names firstmate's own repo, unlike a project registered in `data/projects.md`, so there is no clean point inside the scaffold to detect this case automatically.
@@ -146,6 +130,7 @@ Firstmate PR #3644 demonstrated the cost: pinning a 75-162-script walk took 32.7
 - Plain dash `-`, never an em dash.
 - Never add an agent name as a commit co-author.
 - `bin/*.sh` and `bin/backends/*.sh` must pass `shellcheck`.
+- Run Firstmate production-library tests and commands that source `bin/` scripts under `bash` explicitly, never through the tool shell's default interpreter.
 - Run `bin/fm-lint.sh` before treating a script change as done; it is the single owner of the lint definition that CI and the no-mistakes pre-push gate both invoke, its own header owns what that definition covers, and it refuses to run under any other version of either linter.
 - When a task names a specific tool, implement the work with that tool, or explicitly flag the substitution and its new dependency footprint for review before shipping.
 - Colocate tests with the existing pattern in `tests/`, name them `<subject>.test.sh`, and extend an existing script rather than inventing a new runner.
@@ -153,14 +138,3 @@ Firstmate PR #3644 demonstrated the cost: pinning a 75-162-script walk took 32.7
 - A maintainer-verification record under `docs/verification/` records active empirical facts, not assumptions or task chronology.
 - Include the date, version, exact commands run, and exact output needed to support the current guarantee.
 - Keep incident chronology and delivery evidence in private task reports or PR evidence unless a concise rationale is required to maintain a current safety boundary.
-
-## Agent-only index entry extracted from AGENTS.md
-
-- `firstmate-coding-guidelines` - load before changing firstmate's shared, tracked material, as defined by section 1's list, whether editing directly or briefing a crewmate for a firstmate-repo task.
-
-## Maintaining this file
-
-Keep this file for knowledge useful to almost every future agent session in this project.
-Do not repeat what the codebase already shows; point to the authoritative file, skill, command, or doc.
-Prefer rewriting or pruning existing entries over appending new ones.
-When updating this file, preserve every safety boundary and keep the always-loaded contract concise.

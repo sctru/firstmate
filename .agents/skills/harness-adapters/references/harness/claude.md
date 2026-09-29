@@ -12,7 +12,7 @@ Busy hooks verified 2026-07-28 on Claude Code 2.1.220.
 | Skill | `/<skill>`, for example `/no-mistakes`. |
 | Model | `--model <model>`; discover through the interactive `/model` picker, with alias or full-name shape documented by `claude --help`. |
 | Effort | `--effort <low\|medium\|high\|xhigh\|max>`, verified on 2.1.196. |
-| Permissions | `--dangerously-skip-permissions` by default, or `--permission-mode auto` when `config/claude-permission-mode` is `auto`; the `auto` shape verified on 2.1.269, and `../../../../../docs/configuration.md` "Claude permission mode" owns the file. |
+| Permissions | `--dangerously-skip-permissions` by default, or `--permission-mode auto` when `config/claude-permission-mode` is `auto`; the `auto` shape verified on 2.1.269. See [`Claude permission mode`](../../../../../docs/configuration.md#claude-permission-mode-configclaude-permission-mode) for the launch grant and configuration. |
 
 ## Workspace trust
 
@@ -23,7 +23,7 @@ Every claude spawn therefore pre-registers the directory its pane starts in befo
 A second, separate dialog - "Allow external CLAUDE.md file imports?" - renders whenever a loaded CLAUDE.md chain reaches outside the project tree, which every crewmate's does through the captain's own `~/.claude/CLAUDE.md` importing `~/.claude/RTK.md`.
 `--setting-sources project,local` (the minimal worker tool surface) does not suppress it either, and it gates the pane exactly like the trust dialog: cursor on "No, disable external imports", no way to move the selection from firstmate's steering plane.
 
-`../../../bin/fm-claude-trust.sh` records `hasTrustDialogAccepted` for both the worktree and its primary checkout in `${CLAUDE_CONFIG_DIR:-$HOME}/.claude.json` for a ship or scout spawn; a secondmate spawn registers only its own home entry, since a secondmate home has no separate primary-checkout entry to carry import consent forward from.
+`../../../bin/fm-claude-trust.sh` records `hasTrustDialogAccepted` for both the worktree and its primary checkout in `${CLAUDE_CONFIG_DIR:-$HOME}/.claude.json`, where a home's worker account pin decides `CLAUDE_CONFIG_DIR` (`../../../docs/configuration.md` "Worker account pin"), for a ship or scout spawn; a secondmate spawn registers only its own home entry, since a secondmate home has no separate primary-checkout entry to carry import consent forward from.
 For a ship or scout spawn, the external-imports flags (`hasClaudeMdExternalIncludesApproved`, `hasClaudeMdExternalIncludesWarningShown`) are carried forward alongside the trust flag only when the primary checkout's project entry already carries an explicit `hasClaudeMdExternalIncludesApproved===true` from a prior interactive session - the common first-spawn case is a project claude has never been asked about, so those two flags are left unwritten and the import dialog still renders, even though trust registers normally.
 When the project entry instead already carries an explicit decline (`hasClaudeMdExternalIncludesApproved===false` with `hasClaudeMdExternalIncludesWarningShown===true`), the whole registration refuses - including the trust flag - rather than manufacture consent the human never gave, so that spawn wedges on the trust dialog before it would even reach the import one.
 Both flags `false` is Claude Code's default entry for a project never asked, not a decline, and is treated like an absent flag: trust registers and the import dialog still renders.
@@ -31,11 +31,15 @@ The why-two-entries mechanism and the consent-gating logic live in the script's 
 
 As defense in depth, `../../../bin/fm-spawn.sh` also detects the trust dialog (`Is this a project you created or one you trust?` plus `No, exit`) after every claude launch and, if it still appears, sends Down then Enter itself, failing the spawn loudly if it does not clear.
 The default selection is "No, exit", verified 2026-09-03 after a worker sat parked on it for 40 minutes reporting indistinguishable `busy (fm-spawn)`; never send bare Enter, which would select that default and exit instead.
-A manual `FM_HOME=<active-home> ../../../bin/fm-send.sh <window> --key Down` then `--key Enter` remains the fallback for a dialog that renders outside that check's window.
+A trust dialog that survives that check means pre-registration did not take effect (or the project entry already carries an explicit decline) - inspect the store and the spawn's error output; a manual `FM_HOME=<active-home> ../../../bin/fm-send.sh <window> --key Down` then `--key Enter` remains the fallback for a dialog that renders outside that check's window.
 
-The ordinary steering plane still cannot navigate: firstmate's key plane carries only Enter, Escape, and C-c with no arrow navigation, so a supervisor must not send bare Enter at either declining cursor.
-A visible external-imports dialog is expected, not a failure signal, whenever the project entry has no prior explicit approval on record - the common first-spawn case; `fm-control.sh <id> interrupt` delivers Escape, which dismisses whichever of the two is on screen without answering it, and is the safe way to clear a wedged pane for inspection.
-Do not try to answer the imports dialog with a key; spawn's post-launch check matches the trust dialog only.
+Otherwise never try to answer either dialog with a key.
+Firstmate's ordinary steering key plane carries only Enter, Escape, and C-c with no arrow navigation, and both dialogs render with the cursor on their declining option, which means a sent bare Enter ends the session instead of accepting.
+A visible external-imports dialog is expected, not a failure signal, whenever the project entry has no prior explicit approval on record - the common first-spawn case; spawn's post-launch check matches the trust dialog only.
+`fm-control.sh <id> interrupt` delivers Escape, which is the safe way to clear a wedged workspace-trust dialog for inspection without answering it.
+Escape on the external-imports dialog is different: it records a permanent decline (`hasClaudeMdExternalIncludesApproved: false`, `hasClaudeMdExternalIncludesWarningShown: true`) that `../../../bin/fm-claude-trust.sh` then correctly refuses to override on every later spawn for that project.
+Leave a pane showing the external-imports dialog alone and have a person answer it interactively instead of interrupting it.
+To recover from an already-recorded decline, remove both flags from the project's entry in `~/.claude.json` and approve the imports dialog once by hand.
 
 The once-per-machine bypass-permissions confirmation is a third, separate dialog, scoped to the machine rather than the path, and pre-registration does not address it.
 It was observed rendering in the same shape as the trust dialog, with the selection on `No, exit` and the footer `Enter to confirm . Esc to cancel`, so spawn's Down-then-Enter check may clear it when that signature matches; otherwise an operator accepts it once per machine.
@@ -65,7 +69,7 @@ A `--secondmate` launch omits the statement because a secondmate operates under 
 
 ## Primary integration
 
-Primary behavior was verified 2026-07-04 on 2.1.201, preserved 2026-07-08 on 2.1.204, and Stop auto-arm revalidated 2026-07-24 on 2.1.219.
+[`../../../../../docs/verification/supervision.md`](../../../../../docs/verification/supervision.md#turn-end-guard) records the current primary and Stop auto-arm live evidence.
 This differs from the worker hook, which only touches a task marker through `.claude/settings.local.json`.
 
 Primary `.claude/settings.json` registers `../../../bin/fm-turnend-guard.sh --claude` and `../../../bin/fm-claude-stop-autoarm.sh` with `asyncRewake: true` and `timeout: 28800`.
@@ -78,6 +82,7 @@ Hooks still run through cwd-sensitive `/bin/sh`, so tracked commands anchor thro
 
 The Stop-owned watcher hook runs every Stop, foregrounds `../../../bin/fm-watch-arm.sh` only when eligible, and uses exit-2 async reawakening as notification.
 The model handles notifications but never routine re-arm.
+In a home with `config/supervision-host` the hook foregrounds the supervision host instead, which also runs Claude's print mode as its headless engine; [`supervision-host.md`](../../../../../docs/supervision-host.md#engines) owns the verified engine facts.
 Claude's PreToolUse seatbelt blocks directly, and its deny is honored only with empty stdout; `../../../docs/arm-pretool-check.md` owns that contract.
 
 ### Delegation guard

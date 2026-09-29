@@ -263,7 +263,7 @@ So treat second-mate-routed Relay work as a promised final by construction: the 
 2. Register it with `bin/fm-public-followup.sh register <obligation-id> --relation <relation-id> --work-home <main|secondmate:<id>> --work-id <task-id> --generation <n>`.
    This is what makes the commitment reconcilable without you.
 3. Put `bin/fm-public-followup.sh brief <obligation-id>` output straight into the worker's brief.
-   It prints the exact reporting command for that binding, including the obligation's actual required deliverable keys.
+   It prints the exact reporting command for that binding, pre-fills any deliverable value the binding determines, and gives the accepted format for every remaining placeholder.
    When the work is routed to a second mate rather than spawned here, the routed item's own note MUST carry that same `brief` output so it survives the routing and reaches whoever ends up doing the work.
    A header-only routed item loses the emit command.
    Never ask a worker to find the thread or post the reply: only this home holds the relay consent and the thread binding.
@@ -273,6 +273,9 @@ So treat second-mate-routed Relay work as a promised final by construction: the 
 1. Run `bin/fm-public-followup.sh consume`.
    It reconciles every typed terminal result from disk and prints `ready <obligation-id> <request-id> <platform>` for each commitment that became deliverable.
    A refusal prints `rejected <event-id>: <reason>` and quarantines that event; read the reason rather than re-emitting blindly.
+   The same refusal later arrives as a `public-followup rejected <event-id> ...` wake, so the promise is not left owed silently: have the bound work re-emit with the value the reason names, using the corrected `brief` command.
+   That wake is at-least-once: a failed cleanup can raise the same refusal again, carrying the same event id and reason.
+   When the event id is one you already took up, acknowledge the wake and do not re-brief the work; re-acting is safe but redundant, because the corrected result resolves to the event id that was already accepted.
 2. For each ready commitment, run `bin/fm-public-followup.sh deliver <obligation-id>`.
    With no `--text-file` it reuses the accepted terminal outcome exactly, which is the preferred path for a landed result.
    Only pass `--text-file` when the outcome genuinely needs composing, and hold it to the same public-safety bar as every other reply here.
@@ -309,7 +312,7 @@ Treat a public loop as closed only after `retire`.
 - The reply length authority is the relay (it trims), but a tight reply is on you.
 - Never edit `bin/fm-x-poll.sh`, `bin/fm-x-reply.sh`, or the watcher to "answer faster"; the cadence is handled by the locked session-start bootstrap step.
 
-## 14. Relay
+## Relay activation and ownership contract
 
 Relay is the public-mention integration older docs and some emitted lines still call "X mode"; its identifiers keep the `FMX_`, `x-`, and `fm-x-` spellings.
 Relay ships inert and causes no behavior change until the home opts in by placing `FMX_PAIRING_TOKEN` in its gitignored `.env`.
@@ -323,7 +326,3 @@ For every Relay-linked terminal outcome, load that owner and use the promised-fi
 A promised final public reply is durable state, never conversation memory.
 Load `fmx-respond` before promising one, on a `public-followup ...` check wake, and whenever the session-start digest lists a public commitment awaiting delivery or an open public loop.
 Only the home holding the relay consent and thread binding ever posts it, so never ask a secondmate or crewmate to find the thread or send the reply, and never recover a terminal result by reading a `done:` sentence.
-
-## Agent-only index entry extracted from AGENTS.md
-
-- `fmx-respond` - load on an `x-mention <request_id>` `check:` wake to handle the mention, on an `x-mode-error ...` `check:` wake to report the Relay configuration blocker, on a `public-followup ...` `check:` wake or a startup-surfaced public commitment, and on any milestone or terminal wake for a Relay-linked task before posting its completion follow-up; relevant only when Relay is on.

@@ -35,7 +35,8 @@ Do not overwrite or repurpose an existing path.
 
 ## Delivery posture
 
-The registry records the project's standing posture, which is the captain's default for the work rather than any task's answer; `AGENTS.md` section 7 owns how each task's concrete mode and yolo are resolved at intake and passed explicitly to the brief, the spawn, and any promotion.
+The registry records the project's standing delivery posture and optional ship-branch prefix, which are the captain's defaults rather than any task's answer.
+`AGENTS.md` section 7 owns how each task's concrete mode, yolo, and branch prefix are resolved at intake and passed explicitly to the brief, the spawn, and any promotion.
 Choose that posture when adding or creating the project:
 
 - `no-mistakes` runs the full validation pipeline before a PR.
@@ -51,6 +52,14 @@ Registering a conditional policy is a one-time choice and never requires classif
 The optional `+yolo` posture changes merge authority only and does not change the delivery mode.
 Default it off for every project and every posture, and enable it only on the captain's explicit instruction.
 `AGENTS.md` section 7 owns the merge-authority contract.
+
+The optional `forge=` token records which forge the project's remote actually is; its one value is `forge=gerrit`.
+It is orthogonal to the mode and to `+yolo`, so it is never derived from either, and it is never inferred at use time from a remote name, host, port, or push target.
+At add or create intake, run `bin/fm-forge-detect.sh projects/<name>` once the clone exists and propose its answer alongside the posture; the captain's confirmation is what binds it, and the registry token is the durable record of that confirmation.
+Never register the binding from detection alone, and never re-derive it later from the clone.
+A forge composes with `no-mistakes`, `direct-PR`, and `no-mistakes-prod-only`, and the registry refuses it on `local-only`, which publishes nothing; a Gerrit-hosted project kept local registers `local-only` with no forge token.
+`yolo` is inactive on a `forge=gerrit` project, so never propose `+yolo` alongside it.
+`bin/fm-project-mode.sh`'s header owns the binding and `bin/fm-dod-lib.sh` owns what it changes for a worker.
 
 ## Add or clone an existing project
 
@@ -90,13 +99,3 @@ If any dependency or unlanded work exists, stop and report it before changing an
 Never issue a raw removal command from Firstmate.
 Once that preflight confirms none of the above and the captain's approval is concrete, AGENTS.md hard rule 1's captain-approved project operation exception authorizes firstmate to remove the clone directly and update its registry entry to match.
 When a clone has already been removed through an approved removal, or the registry is provably stale because no clone exists, remove its registry line so navigation matches reality.
-
-## Agent-only index entry extracted from AGENTS.md
-
-- `project-management` - load before adding, creating, removing, or initializing a project.
-  Cloning or registering a project is add intake and uses the same trigger.
-
-Load `project-management` before adding, creating, removing, or initializing a project.
-Cloning or registering a project is add intake and uses the same trigger.
-That skill owns registry syntax, delivery-mode selection, outward-facing consent, clone and initialization procedure, safe rollback, and removal preflight.
-Project creation never authorizes an unmentioned remote, and project removal never bypasses that preflight or unlanded-work checks; hard rule 1's concrete captain-approved project operation exception remains available when its exact conditions are met.
