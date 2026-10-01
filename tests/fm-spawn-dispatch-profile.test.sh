@@ -791,13 +791,13 @@ test_opencode_emits_variant_for_openai_family_effort() {
   rec=$(make_spawn_case profile-opencode-openai opencode "$id")
   read_case_record "$rec"
 
-  out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" --model openai/gpt-5.6-sol --effort xhigh)
+  out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" --model openai/gpt-6.1-sol --effort xhigh)
   status=$?
   expect_code 0 "$status" "opencode spawn with an openai model and effort should succeed"
-  assert_meta_profile "$HOME_DIR/state/$id.meta" opencode openai/gpt-5.6-sol xhigh
+  assert_meta_profile "$HOME_DIR/state/$id.meta" opencode openai/gpt-6.1-sol xhigh
   launch=$(cat "$LAUNCH_LOG")
   assert_contains "$launch" \
-    "OPENCODE_CONFIG_CONTENT='{\"permission\":{\"*\":\"allow\"},\"agent\":{\"build\":{\"model\":\"openai/gpt-5.6-sol\",\"variant\":\"xhigh\"}}}' opencode --model 'openai/gpt-5.6-sol' --prompt" \
+    "OPENCODE_CONFIG_CONTENT='{\"permission\":{\"*\":\"allow\"},\"agent\":{\"build\":{\"model\":\"openai/gpt-6.1-sol\",\"variant\":\"xhigh\"}}}' opencode --model 'openai/gpt-6.1-sol' --prompt" \
     "opencode launch did not write the openai family effort as the build agent's variant"
   pass "opencode emits the variant for an effort the openai family exposes"
 }
