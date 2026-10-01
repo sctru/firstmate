@@ -317,6 +317,7 @@ test_attached_arm_follows_a_slow_live_holder() {
 
   # The holder resumes and delivers a wake: the arm that kept following it
   # reports that wake, so nothing is lost.
+  fm_write_meta "$state/demo.meta" "window=sess:fm-demo"
   printf 'needs-decision: which export format?\n' > "$state/demo.status"
   wait_for_exit "$SEED_PID" 150
   grep -q '^signal:' "$out" || fail "resumed holder did not surface the signal wake: $(cat "$out")"
