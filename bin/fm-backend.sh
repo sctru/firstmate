@@ -646,8 +646,14 @@ fm_backend_source() {  # <name>
       ;;
   esac
   fm_backend_source_readable "$adapter" || return 1
-  # shellcheck disable=SC2086 # sibling names are a fixed space-separated list
-  for rel in $siblings; do
+  # zsh does not word-split unquoted expansions, so peel the fixed
+  # space-separated sibling list with parameter expansion instead of `for`.
+  while [ -n "$siblings" ]; do
+    rel=${siblings%% *}
+    case "$siblings" in
+      *' '*) siblings=${siblings#* } ;;
+      *) siblings= ;;
+    esac
     path="$FM_BACKEND_LIB_DIR/$rel"
     fm_backend_source_readable "$path" || return 1
   done
