@@ -2292,7 +2292,7 @@ SH
 # The intake is channel-agnostic, so chat must reach it the same way a captured
 # review does - for a task-id key, and for a legacy composed identity.
 test_chat_channel_feeds_the_same_keyed_answer_intake() {
-  local home id fb show list
+  local home id fb show list msgs_before pair
   home=$(make_home chat-channel)
   id=sample-chat-review
   mkdir -p "$home/data/$id"
@@ -2397,9 +2397,194 @@ SH
     > "$home/closed-key.out" 2> "$home/closed-key.err"; then
     fail "a key already closed in both ledgers was accepted"
   fi
+
+  # One send is one captain answer: naming two captain-held tasks refuses
+  # before delivery, while a separate send for each task closes both even
+  # with identical words.
+  run_captain "$home" hold sample-chat-pair-a --title "Choose pair option A" \
+    --reason "captain pair choice A pending" --repo sample >/dev/null || fail "could not hold pair call A"
+  run_captain "$home" hold sample-chat-pair-b --title "Choose pair option B" \
+    --reason "captain pair choice B pending" --repo sample >/dev/null || fail "could not hold pair call B"
+  msgs_before=$(find "$home/state/$id.inbox" -name '*.msg' | wc -l | tr -d ' ')
+  if env PATH="$fb:$PATH" FM_ROOT_OVERRIDE="$home" FM_HOME="$home" \
+    FM_STATE_OVERRIDE="$home/state" FM_DATA_OVERRIDE="$home/data" \
+    FM_SEND_LOG="$home/send.log" FM_SEND_SETTLE=0 \
+    "$ROOT/bin/fm-send.sh" "$id" --resolve-key sample-chat-pair-a --resolve-key sample-chat-pair-b "yes" \
+    > "$home/pair.out" 2> "$home/pair.err"; then
+    fail "one chat answer closed two captain-held tasks"
+  fi
+  assert_grep "nothing was sent" "$home/pair.err" "the refused multi-task answer did not say nothing was sent"
+  assert_equals "$msgs_before" "$(find "$home/state/$id.inbox" -name '*.msg' | wc -l | tr -d ' ')" \
+    "the refused multi-task answer still reached the worker"
+  for pair in sample-chat-pair-a sample-chat-pair-b; do
+    show=$(tasks_in "$home" show "$pair" --full)
+    assert_contains "$show" "held: yes" "the refused multi-task answer released $pair"
+    env PATH="$fb:$PATH" FM_ROOT_OVERRIDE="$home" FM_HOME="$home" \
+      FM_STATE_OVERRIDE="$home/state" FM_DATA_OVERRIDE="$home/data" \
+      FM_SEND_LOG="$home/send.log" FM_SEND_SETTLE=0 \
+      "$ROOT/bin/fm-send.sh" "$id" --resolve-key "$pair" "yes" >/dev/null 2>&1 \
+      || fail "a separate chat answer for $pair was refused"
+    show=$(tasks_in "$home" show "$pair" --full)
+    assert_contains "$show" "state: done" "a separate chat answer left $pair open"
+  done
   run_captain "$home" verify "$id" >/dev/null \
     || fail "chat-answered calls did not satisfy the completion gate"
   pass "the chat channel feeds the same keyed-answer intake a captured review does"
+}
+
+# A digest of every durable byte an answer could touch: the backlog, its
+# archives, and the answer-event receipts.
+answer_surface_digest() {  # <home>
+  local home=$1
+  (cd "$home" && find data state/answer-events -type f 2>/dev/null | LC_ALL=C sort \
+    | while IFS= read -r f; do printf '%s ' "$f"; cksum < "$f"; done)
+}
+
+# One captain answer binds to exactly one task. An answer event resolves one
+# task, a batch that maps one event onto several tasks or gives one task two
+# answers is refused before its first write, and separately identified answers
+# still close their own tasks even when their words are identical.
+test_one_answer_event_resolves_exactly_one_task() {
+  local home out before after show rc
+  home=$(make_home answer-binding)
+  run_captain "$home" hold sample-bind-a --title "Choose option A" \
+    --reason "captain choice A pending" --repo sample >/dev/null \
+    || fail "could not hold the first fixture call"
+  run_captain "$home" hold sample-bind-b --title "Choose option B" \
+    --reason "captain choice B pending" --repo sample >/dev/null \
+    || fail "could not hold the second fixture call"
+
+  # Direct answers: the event binds to the first task it resolves.
+  printf 'yes\n' > "$home/yes.txt"
+  out=$(run_captain "$home" answer sample-bind-a --decision-file "$home/yes.txt" \
+    --event-id chat-msg-1 2>&1) || fail "a first answer under a new event was refused: $out"
+  before=$(answer_surface_digest "$home")
+  rc=0
+  out=$(run_captain "$home" answer sample-bind-b --decision-file "$home/yes.txt" \
+    --event-id chat-msg-1 2>&1) || rc=$?
+  expect_code 1 "$rc" "one answer event resolved a second task"
+  assert_contains "$out" "answer event chat-msg-1 already resolved task sample-bind-a" \
+    "the retargeted event was not refused for its binding"
+  after=$(answer_surface_digest "$home")
+  assert_equals "$before" "$after" "a refused retarget changed the backlog or a receipt"
+  show=$(tasks_in "$home" show sample-bind-b --full)
+  assert_contains "$show" "held: yes" "a refused retarget released the second call"
+  out=$(run_captain "$home" answer sample-bind-a --decision-file "$home/yes.txt" \
+    --event-id chat-msg-1 2>&1) || fail "an exact event replay was not idempotent: $out"
+  assert_equals "$after" "$(answer_surface_digest "$home")" "an exact event replay wrote again"
+  printf 'no\n' > "$home/no.txt"
+  rc=0
+  out=$(run_captain "$home" answer sample-bind-a --decision-file "$home/no.txt" \
+    --event-id chat-msg-1 2>&1) || rc=$?
+  expect_code 1 "$rc" "one answer event recorded a changed decision"
+  assert_contains "$out" "already recorded a different decision" \
+    "the changed decision was not refused for its event binding"
+  # The same words under their own event are a separate answer.
+  out=$(run_captain "$home" answer sample-bind-b --decision-file "$home/yes.txt" \
+    --event-id chat-msg-2 2>&1) || fail "a separately identified identical answer was refused: $out"
+  show=$(tasks_in "$home" show sample-bind-b --full)
+  assert_contains "$show" "state: done" "the separately identified answer left its call open"
+
+  # Keyed batches: one event mapped onto two held tasks refuses every row.
+  run_captain "$home" hold sample-bind-c --title "Choose option C" \
+    --reason "captain choice C pending" --repo sample >/dev/null || fail "could not hold call C"
+  run_captain "$home" hold sample-bind-d --title "Choose option D" \
+    --reason "captain choice D pending" --repo sample >/dev/null || fail "could not hold call D"
+  before=$(answer_surface_digest "$home")
+  for flag in --check ''; do
+    rc=0
+    # shellcheck disable=SC2086  # flag is empty or one literal flag.
+    out=$(printf 'sample-bind-c\tyes\t\t\tboard-pick-7\nsample-bind-d\tyes\t\t\tboard-pick-7\n' \
+      | run_captain "$home" answers --source "binding fixture" $flag 2>&1) || rc=$?
+    expect_code 1 "$rc" "a batch mapping one event onto two tasks was accepted (${flag:-apply})"
+    assert_contains "$out" "answer event board-pick-7 maps to several tasks" \
+      "the ambiguous expansion was not named (${flag:-apply})"
+    assert_contains "$out" "nothing was recorded" "the refusal did not say nothing was recorded"
+  done
+  rc=0
+  out=$(printf 'sample-bind-c\tyes\t\nsample-bind-c\tno\t\n' \
+    | run_captain "$home" answers --source "binding fixture" 2>&1) || rc=$?
+  expect_code 1 "$rc" "a batch giving one task two answers was accepted"
+  assert_contains "$out" "task sample-bind-c receives conflicting answers" \
+    "the conflicting answers were not named"
+  rc=0
+  out=$(printf 'sample-bind-c\tyes\t\t\tchat-msg-1\n' \
+    | run_captain "$home" answers --source "binding fixture" 2>&1) || rc=$?
+  expect_code 1 "$rc" "a batch reused an event already bound to another task"
+  assert_contains "$out" "answer event chat-msg-1 already resolved task sample-bind-a" \
+    "the stored event binding did not refuse the batch"
+  after=$(answer_surface_digest "$home")
+  assert_equals "$before" "$after" "a refused batch wrote before its preflight finished"
+  for id in sample-bind-c sample-bind-d; do
+    show=$(tasks_in "$home" show "$id" --full)
+    assert_contains "$show" "held: yes" "a refused batch released $id"
+  done
+
+  # Separately identified rows with identical words close their own tasks,
+  # and a replay of the same batch is idempotent.
+  out=$(printf 'sample-bind-c\tyes\t\t\tboard-pick-8\nsample-bind-d\tyes\t\t\tboard-pick-9\n' \
+    | run_captain "$home" answers --source "binding fixture" 2>&1) \
+    || fail "separately identified identical answers were refused: $out"
+  assert_contains "$out" "answers: closed=2 skipped=0" "the separate answers did not both close"
+  after=$(answer_surface_digest "$home")
+  out=$(printf 'sample-bind-c\tyes\t\t\tboard-pick-8\nsample-bind-d\tyes\t\t\tboard-pick-9\n' \
+    | run_captain "$home" answers --source "binding fixture" 2>&1) \
+    || fail "an exact batch replay was refused: $out"
+  assert_equals "$after" "$(answer_surface_digest "$home")" "an exact batch replay wrote again"
+  pass "one answer event resolves exactly one task, and separate answers may share words"
+}
+
+# Replays the incident shape: a new answer arrives for a call that an earlier
+# answer already closed. The refusal changes nothing, a prefix-related task is
+# never matched, and the recovery path - a new follow-up task - touches only
+# that task.
+test_changed_answer_on_a_closed_call_moves_to_a_follow_up() {
+  local home out before after old_show unrelated_show rc
+  home=$(make_home closed-call-replay)
+  tasks_in "$home" add sample-unrelated-ship "Unrelated queued work" --kind ship --repo sample >/dev/null \
+    || fail "could not add unrelated queued work"
+  run_captain "$home" hold sample-unrelated-call --title "Unrelated captain call" \
+    --reason "unrelated choice pending" --repo sample >/dev/null || fail "could not hold the unrelated call"
+  run_captain "$home" hold vas-viz-live-handtest --title "Run the VAS phone test" \
+    --reason "captain phone test pending" --repo sample >/dev/null || fail "could not hold the test call"
+  printf 'The phone test failed.\n' > "$home/failed.txt"
+  run_captain "$home" answer vas-viz-live-handtest --decision-file "$home/failed.txt" \
+    --event-id msg-127 >/dev/null || fail "could not record the first test answer"
+  run_captain "$home" hold vas-viz-live-handtest-followup --title "Verify the VAS rerun" \
+    --reason "captain verification pending" --repo sample >/dev/null || fail "could not hold the prefix-related call"
+
+  old_show=$(tasks_in "$home" show vas-viz-live-handtest --full)
+  unrelated_show=$(tasks_in "$home" show sample-unrelated-call --full)
+  before=$(answer_surface_digest "$home")
+  printf 'Ok I did the phone test for vas it looks solid.\n' > "$home/solid.txt"
+  rc=0
+  out=$(run_captain "$home" answer vas-viz-live-handtest --decision-file "$home/solid.txt" \
+    --event-id msg-184 --release 2>&1) || rc=$?
+  expect_code 1 "$rc" "a changed answer on a closed call was accepted"
+  rc=0
+  out=$(run_captain "$home" answer vas-viz-live-handtest --decision-file "$home/solid.txt" \
+    --event-id msg-184 2>&1) || rc=$?
+  expect_code 1 "$rc" "a changed answer on a closed call was accepted"
+  assert_contains "$out" "records a different captain decision" \
+    "the closed call's changed-answer refusal changed"
+  rc=0
+  out=$(printf 'vas-viz-live-handtest\tOk it looks solid\t\t\tmsg-184\n' \
+    | run_captain "$home" answers --source "incident replay" 2>&1) || rc=$?
+  expect_code 1 "$rc" "a keyed changed answer on a closed call was accepted"
+  assert_not_contains "$out" "vas-viz-live-handtest-followup" "the keyed answer matched a prefix-related task"
+  after=$(answer_surface_digest "$home")
+  assert_equals "$before" "$after" "a refused answer on a closed call changed the backlog, an archive, or a receipt"
+
+  # Recovery: the new answer belongs to the follow-up task.
+  out=$(run_captain "$home" answer vas-viz-live-handtest-followup --decision-file "$home/solid.txt" \
+    --event-id msg-184 2>&1) || fail "the follow-up task could not record the new answer: $out"
+  assert_equals "$old_show" "$(tasks_in "$home" show vas-viz-live-handtest --full)" \
+    "recording the follow-up answer changed the closed call"
+  assert_equals "$unrelated_show" "$(tasks_in "$home" show sample-unrelated-call --full)" \
+    "recording the follow-up answer changed an unrelated call"
+  assert_equals 1 "$(grep -rF 'it looks solid' "$home/data" | wc -l | tr -d ' ')" \
+    "the new answer landed somewhere other than its one follow-up task"
+  pass "a changed answer on a closed call changes nothing and moves to its own follow-up task"
 }
 
 test_origin_slug_validation_precedes_path_construction() {
@@ -4162,6 +4347,8 @@ test_unbound_source_closes_no_hold
 test_legacy_identities_keep_working
 test_board_answer_reaches_the_keyed_answer_intake
 test_chat_channel_feeds_the_same_keyed_answer_intake
+test_one_answer_event_resolves_exactly_one_task
+test_changed_answer_on_a_closed_call_moves_to_a_follow_up
 test_origin_slug_validation_precedes_path_construction
 test_status_resolution_over_an_open_hold_is_signalled
 test_legitimate_holds_produce_no_divergence_signal

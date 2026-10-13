@@ -89,6 +89,14 @@ A matching retry also completes any resolution-first normalization left unfinish
 - A drifted answer or a mode mismatch is rejected.
 - A re-held task accepts a new answer as a new record on top.
 
+### One answer, one task
+
+`answer --event-id` binds one captain answer to the one task it resolves.
+Just before its first write, the script records the event, the task, and the decision digest as a private receipt under `state/answer-events/`.
+The same event, task, and decision replays as a no-op.
+The same event on another task, or with a changed decision, is refused before any write.
+Words alone never identify an answer, so two answers that both say "yes" stay valid when each has its own event.
+
 On a task closed outside the script, `answer` records the missing block only when the captain-hold annotations tasks-axi preserves through a close prove the captain owned it.
 It also verifies the task stays closed.
 
@@ -182,8 +190,12 @@ Only `answer` with the captain's words or evidence-backed `reconcile close` reso
 
 "A keyed answer resolves its matching captain-held task" is one capability with one owner.
 `answers` is its channel-agnostic entry point.
-It reads `<task-id>\t<answer>\t<label>[\t<mode>]` lines and resolves each named task through the same `answer` path.
+It reads `<task-id>\t<answer>\t<label>[\t<mode>[\t<event-id>]]` lines and resolves each named task through the same `answer` path.
 Every guard therefore applies identically no matter which channel the answer arrived on.
+Rows that share an event id are one captain answer, and rows without one are each a separate answer.
+Before its first write, the command preflights the whole batch.
+It refuses every row and records nothing when one event resolves to more than one task, when one task receives different answers, close modes, or events, or when a receipt already binds an event elsewhere.
+`--check` runs only that preflight.
 
 The optional mode column carries a card-declared close:
 
@@ -219,6 +231,8 @@ Two channels feed that one intake today, and both are ordinary callers rather th
 - For a key the status log still owns, that script's header owns the status-log close.
 - A key the status log no longer owns is resolved to a still-open captain-held task and fed as one keyed line.
   The script tries the key as a task id first, then the legacy derived identity.
+- One send is one answer event, and the script runs the intake's `--check` preflight before delivery.
+  A send that names two or more captain-held tasks is therefore refused, and nothing is sent.
 
 `bin/fm-procevent.sh` is the captured-result channel:
 
@@ -521,7 +535,9 @@ The suite does not test the accepted merge-to-cleanup re-hold window or asynchro
 
 - Answer-time resolution works through a bound channel with task-id keys.
   This includes the `release` mode, mode-matched replay idempotence, and the refusal of drifted, mode-mismatched, absent, unheld, and already-closed keys.
-- The chat channel reaches the same intake.
+- The chat channel reaches the same intake, and one send that names two captain-held tasks is refused before delivery.
+- One answer event resolves exactly one task: a retargeted or changed event is refused with every backlog, archive, and receipt byte unchanged, an exact replay writes nothing, and separately identified answers with identical words close their own tasks.
+- A changed answer on a closed call is refused without changing any byte, never matches a prefix-related task, and records cleanly on a new follow-up task.
 - Hold-set stamping precedes visible hold state, preserves an active lifecycle's timestamp, and resets after release.
 - Interrupted answer closure retains the stamp until close and restores resolution-first ordering on retry.
 - Deferral through `--until` leaves `captain_actionable` false until due.

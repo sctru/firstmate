@@ -22,8 +22,8 @@
 # Usage:
 #   fm-captain-hold.sh hold <task-id> --reason <reason> \
 #     [--title <title>] [--repo <repo>] [--origin <origin-id>] [--until YYYY-MM-DD]
-#   fm-captain-hold.sh answer <task-id> --decision-file <path> [--release]
-#   fm-captain-hold.sh answers [<legacy-origin> | --any-origin] --source <provenance>   (keyed answers on stdin)
+#   fm-captain-hold.sh answer <task-id> --decision-file <path> [--release] [--event-id <event-id>]
+#   fm-captain-hold.sh answers [<legacy-origin> | --any-origin] --source <provenance> [--check]   (keyed answers on stdin)
 #   fm-captain-hold.sh reconcile-requests --source-id <source-id> --source <provenance>   (task ids on stdin)
 #   fm-captain-hold.sh bind <source-id> [<legacy-origin> | --any-origin]
 #   fm-captain-hold.sh unbind <source-id>
@@ -63,7 +63,14 @@
 # ordering. An exact retry also completes unfinished ordering normalization and
 # is idempotent only when its requested close mode
 # matches the newest record; a changed decision or a mode mismatch is rejected.
-# A re-held task may record a new answer on top. On a task already closed outside this script,
+# A re-held task may record a new answer on top.
+# `--event-id` names the captain answer being recorded (a chat message, a card
+# selection) and binds it to this one task: the script records the event, task,
+# and decision digest under `state/answer-events/<event-id>.event` just before
+# its first write. The same event, task, and decision replays; the same event on
+# another task, or with a changed decision, is refused before any write. Text
+# alone never identifies an answer, so two answers that both say "yes" need two
+# event ids, not one. On a task already closed outside this script,
 # `answer` records the missing resolution block (the old `repair` path) only
 # when the task still carries the captain-hold provenance tasks-axi preserves
 # through a close, so an ordinary finished task cannot be dressed up as an
@@ -74,12 +81,20 @@
 # ONE KEYED-ANSWER INTAKE, FED BY EVERY CHANNEL.
 # "A keyed answer resolves its matching captain-held task" is a single
 # capability, owned here and nowhere else. `answers` reads
-# `<task-id>\t<answer>\t<label>[\t<mode>]` lines on stdin and resolves each named
-# task through the very same `answer` path above, so every guard applies
-# identically no matter which channel the answer arrived on. The key IS the
-# task id - no identity arithmetic. The optional fourth field selects the close:
-# empty or `done` completes the task, `release` lifts the hold so held work
-# resumes; anything else is skipped. A key that names no task, a task that is
+# `<task-id>\t<answer>\t<label>[\t<mode>[\t<event-id>]]` lines on stdin and
+# resolves each named task through the very same `answer` path above, so every
+# guard applies identically no matter which channel the answer arrived on. The
+# key IS the task id - no identity arithmetic. The optional fourth field selects
+# the close: empty or `done` completes the task, `release` lifts the hold so
+# held work resumes; anything else is skipped. The optional fifth field is the
+# answer event id `answer --event-id` binds; rows that share it are ONE captain
+# answer, and rows without it are each their own answer.
+# Before its first write the command preflights the whole batch and refuses
+# every row, recording nothing, when one event id resolves to more than one
+# task, one task receives different answers, close modes, or event ids, or an
+# event id is already bound to another task or decision. `--check` runs only
+# that preflight, so a channel can refuse an ambiguous answer before it
+# delivers anything. A key that names no task, a task that is
 # not held for the captain, or a task already closed is reported as `skipped:`
 # and feeds nothing. A replayed delivery whose answer digest and requested
 # close mode both match the newest record is reported `closed:` and is a no-op;
@@ -999,20 +1014,106 @@ remove_interrupted_answer_stamp() {  # <task-id>
   rm -f -- "$tmp"
 }
 
+# --- answer events: one captain answer resolves exactly one task -------------
+#
+# An answer event is one captain answer as its caller identifies it. A receipt
+# under state/answer-events/ binds the event to the one task it resolved and to
+# the digest of the decision recorded there. The same event, task, and decision
+# replays; the same event on another task, or with a changed decision, is
+# refused before any write. Text alone never identifies an event, so two
+# separately identified answers may both say "yes".
+
+ANSWER_EVENT_DIR="$STATE/answer-events"
+ANSWER_EVENT_SCHEMA=fm-answer-event.v1
+
+validate_event_id() {  # <event-id>
+  validate_slug event-id "$1"
+  [ "${#1}" -le 128 ] || fail "event-id must be at most 128 characters: $1"
+  case "$1" in .*) fail "event-id must not start with a dot: $1" ;; esac
+}
+
+answer_event_path() { printf '%s/%s.event\n' "$ANSWER_EVENT_DIR" "$1"; }
+
+# Prints "<task-id> <digest>" for a recorded event and nothing for a new one.
+# An unreadable receipt is an error, never "unrecorded".
+read_answer_event() {  # <event-id>
+  local path schema task digest
+  path=$(answer_event_path "$1")
+  [ -e "$path" ] || [ -L "$path" ] || return 0
+  [ -f "$path" ] && [ ! -L "$path" ] || fail "answer event receipt is unsafe: $path"
+  schema=$(sed -n 's/^schema=//p' "$path" | head -1)
+  [ "$schema" = "$ANSWER_EVENT_SCHEMA" ] || fail "answer event receipt has an incompatible schema: $path"
+  task=$(sed -n 's/^task=//p' "$path" | head -1)
+  digest=$(sed -n 's/^digest=//p' "$path" | head -1)
+  case "$task" in ''|*[!A-Za-z0-9._-]*) fail "answer event receipt has an invalid task id: $path" ;; esac
+  case "$digest" in ''|*[!0-9a-f]*) fail "answer event receipt has an invalid digest: $path" ;; esac
+  printf '%s %s\n' "$task" "$digest"
+}
+
+# Prints the refusal and returns 0 when the event may not record this decision
+# on this task; returns 1 when it is new or an exact replay.
+answer_event_conflict() {  # <event-id> <task-id> <digest>
+  local recorded
+  if ! recorded=$(read_answer_event "$1" 2>&1); then
+    printf '%s' "${recorded#fm-captain-hold: }"
+    return 0
+  fi
+  [ -n "$recorded" ] || return 1
+  if [ "${recorded%% *}" != "$2" ]; then
+    printf 'answer event %s already resolved task %s; one answer resolves one task, so record the answer for %s under its own event id' \
+      "$1" "${recorded%% *}" "$2"
+    return 0
+  fi
+  if [ "${recorded#* }" != "$3" ]; then
+    printf 'answer event %s already recorded a different decision for task %s' "$1" "$2"
+    return 0
+  fi
+  return 1
+}
+
+# Binds the event just before the first write. A hard link publishes the
+# receipt only when none exists, so two answers racing on one event cannot
+# both claim it; the loser is judged against the winner's receipt.
+claim_answer_event() {  # <event-id-or-empty> <task-id> <digest>
+  local event=$1 id=$2 digest=$3 dest tmp reason
+  [ -n "$event" ] || return 0
+  (umask 077; mkdir -p "$ANSWER_EVENT_DIR") || fail "cannot create $ANSWER_EVENT_DIR"
+  [ -d "$ANSWER_EVENT_DIR" ] && [ ! -L "$ANSWER_EVENT_DIR" ] || fail "answer event dir is unsafe: $ANSWER_EVENT_DIR"
+  dest=$(answer_event_path "$event")
+  tmp=$(umask 077; mktemp "$ANSWER_EVENT_DIR/.event.XXXXXX") || fail "cannot stage the answer event $event"
+  if ! printf 'schema=%s\ntask=%s\ndigest=%s\n' "$ANSWER_EVENT_SCHEMA" "$id" "$digest" > "$tmp"; then
+    rm -f -- "$tmp"
+    fail "cannot stage the answer event $event"
+  fi
+  if ln -- "$tmp" "$dest" 2>/dev/null; then
+    rm -f -- "$tmp"
+    return 0
+  fi
+  rm -f -- "$tmp"
+  if reason=$(answer_event_conflict "$event" "$id" "$digest"); then
+    fail "$reason"
+  fi
+  [ -f "$dest" ] || fail "cannot record the answer event $event"
+}
+
 command_answer() {
-  local id=${1:-} decision_file='' release=0 show state hold_kind body outcome recorded_mode occurrence
+  local id=${1:-} decision_file='' release=0 event_id='' show state hold_kind body outcome recorded_mode occurrence reason
   [ "$#" -ge 1 ] || { usage >&2; exit 2; }
   shift
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --decision-file) shift; decision_file=${1:-} ;;
       --release) release=1 ;;
+      --event-id) shift; event_id=${1:-}; validate_event_id "$event_id" ;;
       *) usage >&2; exit 2 ;;
     esac
     shift
   done
   validate_slug task-id "$id"
   load_decision "$decision_file"
+  if [ -n "$event_id" ] && reason=$(answer_event_conflict "$event_id" "$id" "$DECISION_DIGEST"); then
+    fail "$reason"
+  fi
   acquire_task_control_lock "$id"
   require_tasks_axi
   task_show "$id" || fail "captain-held task $id is absent from this home's configured backlog (data directory $DATA)"
@@ -1035,6 +1136,7 @@ command_answer() {
         || fail "task $id records this resolution with mode ${recorded_mode:-unknown}; it is not a captain-answer replay"
       [ "$release" = 0 ] \
         || fail "task $id records this answer with mode ${recorded_mode:-unknown}; --release cannot reopen a closed task"
+      claim_answer_event "$event_id" "$id" "$DECISION_DIGEST"
       remove_interrupted_answer_stamp "$id"
       if [ "$recorded_mode" = repaired ]; then
         publish_parent_resolution_then_retire "$id" $((occurrence - 1)) "answered (repaired)"
@@ -1050,6 +1152,7 @@ command_answer() {
     # this really was the captain's item rather than ordinary finished work.
     [ "$hold_kind" = captain ] \
       || fail "task $id was never held for the captain; nothing to record an answer on"
+    claim_answer_event "$event_id" "$id" "$DECISION_DIGEST"
     write_resolution_record "$id" repaired "$body"
     remove_interrupted_answer_stamp "$id"
     task_show "$id" || fail "task $id disappeared while recording the answer"
@@ -1077,6 +1180,7 @@ command_answer() {
         answered|routed) [ "$release" = 0 ] || fail "task $id records this answer as a close; retry without --release" ;;
         *) fail "task $id records this resolution with mode ${recorded_mode:-unknown}; it is not a captain-answer replay" ;;
       esac
+      claim_answer_event "$event_id" "$id" "$DECISION_DIGEST"
       if ! close_answered "$id" "$release"; then
         fail "could not close answered captain-held task $id"
       fi
@@ -1085,6 +1189,7 @@ command_answer() {
       printf '%s: %s\n' "$outcome" "$id"
       return 0
     fi
+    claim_answer_event "$event_id" "$id" "$DECISION_DIGEST"
     write_resolution_record "$id" "$outcome" "$body"
     if ! close_answered "$id" "$release"; then
       fail "could not close answered captain-held task $id"
@@ -1106,6 +1211,7 @@ command_answer() {
       || fail "task $id records a different captain decision with mode ${recorded_mode:-unknown}"
     [ "$recorded_mode" = released ] && [ "$release" = 1 ] \
       || fail "task $id records this answer with mode ${recorded_mode:-unknown}; replay requires matching --release"
+    claim_answer_event "$event_id" "$id" "$DECISION_DIGEST"
     remove_interrupted_answer_stamp "$id"
     publish_parent_resolution_then_retire "$id" $((occurrence - 1)) released
     printf 'released: %s\n' "$id"
@@ -1210,13 +1316,18 @@ sanitize_reconcile_provenance() {
 }
 
 command_answers() {
-  local origin='' source='' row rest key answer label mode id show state hold_kind body digest legacy_digest legacy_key
-  local recorded_digest recorded_mode occurrence tmp err closed=0 skipped=0 reason release_flag tab=$'\t'
-  local resolve_rc
+  local origin='' source='' check=0 row rest key answer label mode event id show state hold_kind body digest legacy_digest legacy_key
+  local recorded_digest recorded_mode occurrence tmp err closed=0 skipped=0 refused=0 reason release_flag tab=$'\t'
+  local resolve_rc i j n
+  # Per-row batch records, parallel indexed arrays (bash 3.2 has no maps). A
+  # row whose ROW_NOTE is set was settled during resolution and is only
+  # reported; every other row carries its resolved task and decision digest.
+  local -a ROW_KEY=() ROW_ANSWER=() ROW_LABEL=() ROW_RELEASE=() ROW_EVENT=() ROW_ID=() ROW_DIGEST=() ROW_NOTE=()
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --source) shift; source=${1:-} ;;
       --any-origin) origin=$BINDING_ANY ;;
+      --check) check=1 ;;
       --*) usage >&2; exit 2 ;;
       *)
         [ -z "$origin" ] || { usage >&2; exit 2; }
@@ -1234,6 +1345,8 @@ command_answers() {
   tmp=$(umask 077; mktemp "${TMPDIR:-/tmp}/fm-keyed-decision.XXXXXX") || fail "cannot stage the captain decision"
   err=$(umask 077; mktemp "${TMPDIR:-/tmp}/fm-keyed-decision-err.XXXXXX") \
     || { rm -f -- "$tmp"; fail "cannot stage the captain decision diagnostics"; }
+
+  # Phase 1: parse and resolve every row without writing anything.
   while IFS= read -r row; do
     key=${row%%"$tab"*}
     rest=''
@@ -1241,35 +1354,43 @@ command_answers() {
     answer=${rest%%"$tab"*}
     case "$rest" in *"$tab"*) rest=${rest#*"$tab"} ;; *) rest='' ;; esac
     label=${rest%%"$tab"*}
-    case "$rest" in *"$tab"*) mode=${rest#*"$tab"} ;; *) mode='' ;; esac
+    case "$rest" in *"$tab"*) rest=${rest#*"$tab"} ;; *) rest='' ;; esac
+    mode=${rest%%"$tab"*}
+    case "$rest" in *"$tab"*) event=${rest#*"$tab"} ;; *) event='' ;; esac
     [ -n "${key:-}" ] || continue
     case "$key" in *[!A-Za-z0-9._-]*) continue ;; esac
     [ "${#key}" -le 128 ] || continue
     answer=$(sanitize_field "${answer:-}")
     [ -n "$answer" ] || continue
     label=$(sanitize_field "${label:-}")
+    n=${#ROW_KEY[@]}
+    ROW_KEY[n]=$key ROW_ANSWER[n]=$answer ROW_LABEL[n]=$label ROW_RELEASE[n]='' ROW_EVENT[n]=''
+    ROW_ID[n]='' ROW_DIGEST[n]='' ROW_NOTE[n]=''
     if [ "$answer" = "$RECONCILE_VALUE" ]; then
-      printf 'refused: %s (reconcile requests require a bound captured source)\n' "$key"
-      skipped=$((skipped + 1))
+      ROW_NOTE[n]="refused: $key (reconcile requests require a bound captured source)"
       continue
     fi
-    release_flag=''
     case "${mode:-}" in
       ''|done) : ;;
-      release) release_flag=--release ;;
+      release) ROW_RELEASE[n]=--release ;;
       *)
-        printf 'skipped: %s (unknown close mode %s)\n' "$key" "$(sanitize_field "$mode")"
-        skipped=$((skipped + 1))
+        ROW_NOTE[n]="skipped: $key (unknown close mode $(sanitize_field "$mode"))"
         continue
         ;;
     esac
+    if [ -n "$event" ]; then
+      case "$event" in
+        .*|*[!A-Za-z0-9._-]*) ROW_NOTE[n]="skipped: $key (invalid answer event id)"; continue ;;
+      esac
+      [ "${#event}" -le 128 ] || { ROW_NOTE[n]="skipped: $key (invalid answer event id)"; continue; }
+      ROW_EVENT[n]=$event
+    fi
     resolve_rc=0
     id=$(resolve_entry "$origin" "$key" 2>"$err") || resolve_rc=$?
     id=${id%% *}
     if [ "$resolve_rc" = 2 ]; then
       reason=$(tr -d '\n' < "$err")
-      printf 'skipped: %s (migrated-hold scan refused%s)\n' "$key" "${reason:+: $reason}"
-      skipped=$((skipped + 1))
+      ROW_NOTE[n]="skipped: $key (migrated-hold scan refused${reason:+: $reason})"
       continue
     fi
     if [ "$resolve_rc" -ne 0 ]; then
@@ -1279,13 +1400,71 @@ command_answers() {
       # must not be spent as a skip.
       [ "$resolve_rc" -ne 124 ] \
         || fail "the backlog backend exceeded its read bound resolving $key"
-      printf 'skipped: %s (no captain-held task with that id)\n' "$key"
+      ROW_NOTE[n]="skipped: $key (no captain-held task with that id)"
+      continue
+    fi
+    ROW_ID[n]=$id
+    ROW_DIGEST[n]=$(sha256_text "$(keyed_decision_text "$source" "$id" "$answer" "$label")")
+  done
+
+  # Phase 2: preflight the whole batch before its first write. One answer
+  # event may resolve only one task, one task may receive only one decision
+  # and close mode per batch, and an event already bound by a receipt may not
+  # move to another task or decision. Any conflict refuses every row.
+  n=${#ROW_KEY[@]}
+  i=0
+  while [ "$i" -lt "$n" ]; do
+    if [ -n "${ROW_ID[i]}" ]; then
+      j=$((i + 1))
+      while [ "$j" -lt "$n" ]; do
+        if [ -n "${ROW_ID[j]}" ]; then
+          if [ -n "${ROW_EVENT[i]}" ] && [ "${ROW_EVENT[i]}" = "${ROW_EVENT[j]}" ] \
+            && [ "${ROW_ID[i]}" != "${ROW_ID[j]}" ]; then
+            printf 'refused: answer event %s maps to several tasks (%s, %s); one answer resolves one task\n' \
+              "${ROW_EVENT[i]}" "${ROW_ID[i]}" "${ROW_ID[j]}"
+            refused=$((refused + 1))
+          fi
+          if [ "${ROW_ID[i]}" = "${ROW_ID[j]}" ] \
+            && { [ "${ROW_DIGEST[i]}" != "${ROW_DIGEST[j]}" ] || [ "${ROW_RELEASE[i]}" != "${ROW_RELEASE[j]}" ] \
+              || [ "${ROW_EVENT[i]}" != "${ROW_EVENT[j]}" ]; }; then
+            printf 'refused: task %s receives conflicting answers in one batch\n' "${ROW_ID[i]}"
+            refused=$((refused + 1))
+          fi
+        fi
+        j=$((j + 1))
+      done
+      if [ -n "${ROW_EVENT[i]}" ] \
+        && reason=$(answer_event_conflict "${ROW_EVENT[i]}" "${ROW_ID[i]}" "${ROW_DIGEST[i]}"); then
+        printf 'refused: %s\n' "$reason"
+        refused=$((refused + 1))
+      fi
+    fi
+    i=$((i + 1))
+  done
+  if [ "$refused" -gt 0 ]; then
+    rm -f -- "$tmp" "$err"
+    printf 'answers: refused=%s; nothing was recorded\n' "$refused"
+    return 1
+  fi
+  if [ "$check" = 1 ]; then
+    rm -f -- "$tmp" "$err"
+    printf 'answers: preflight passed for %s row(s)\n' "$n"
+    return 0
+  fi
+
+  # Phase 3: resolve each preflighted row through the one answer path.
+  i=0
+  while [ "$i" -lt "$n" ]; do
+    key=${ROW_KEY[i]} answer=${ROW_ANSWER[i]} label=${ROW_LABEL[i]} release_flag=${ROW_RELEASE[i]}
+    event=${ROW_EVENT[i]} id=${ROW_ID[i]} digest=${ROW_DIGEST[i]}
+    i=$((i + 1))
+    if [ -n "${ROW_NOTE[i - 1]}" ]; then
+      printf '%s\n' "${ROW_NOTE[i - 1]}"
       skipped=$((skipped + 1))
       continue
     fi
     keyed_decision_text "$source" "$id" "$answer" "$label" > "$tmp" \
       || fail "cannot stage the captain decision for $id"
-    digest=$(sha256_text "$(cat "$tmp")")
     legacy_digest=''
     if [ "$id" != "$key" ]; then
       legacy_key=$key
@@ -1313,6 +1492,14 @@ command_answers() {
           && closed_answer_replay_mode_compatible "$recorded_mode" "$body"; } \
         || { [ "$release_flag" = --release ] && [ "$state" != "done" ] \
           && [ "$hold_kind" != captain ] && [ "$recorded_mode" = released ]; }; then
+        if [ -n "$event" ]; then
+          ( claim_answer_event "$event" "$id" "$digest" ) 2>"$err" || {
+            reason=$(tr -d '\n' < "$err" | sed 's/^fm-captain-hold: //')
+            printf 'skipped: %s (%s)\n' "$id" "$reason"
+            skipped=$((skipped + 1))
+            continue
+          }
+        fi
         occurrence=$(resolution_record_count "$body")
         case "$recorded_mode" in
           repaired) publish_parent_resolution_then_retire "$id" "$occurrence" "answered (repaired)" ;;
@@ -1335,7 +1522,8 @@ command_answers() {
       continue
     fi
     # shellcheck disable=SC2086  # release_flag is empty or a single literal flag.
-    if "$0" answer "$id" --decision-file "$tmp" $release_flag </dev/null >/dev/null 2>"$err"; then
+    if "$0" answer "$id" --decision-file "$tmp" $release_flag ${event:+--event-id "$event"} \
+      </dev/null >/dev/null 2>"$err"; then
       # A parent-channel delivery problem is reported on stderr by the answer
       # path even when the close succeeded; keep it visible.
       [ ! -s "$err" ] || cat "$err" >&2
