@@ -1118,6 +1118,9 @@ export default function (pi: ExtensionAPI) {
   }
 
   pi.on?.("before_agent_start", (event) => {
+    // Pi 1.2.0+ fires this for custom triggerTurn runs too; those carry message,
+    // not prompt. Older Pi always provided prompt here. Wakes are user prompts.
+    if (!("prompt" in event) || typeof event.prompt !== "string") return;
     consumeWake(generation, event.prompt);
   });
   pi.on?.("message_start", (event) => {
