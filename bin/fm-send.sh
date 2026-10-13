@@ -193,6 +193,11 @@
 # the legacy `<task>-decision-<key>` identity for pre-collapse rows. fm-send
 # closes nothing itself; it hands the intake `<task-id>\t<answer>\t<label>`
 # exactly as every other channel does, and the intake owns what that means.
+# One send is one captain answer, so its keyed lines carry one answer event
+# id, and the intake's `--check` preflight runs before delivery: several
+# --resolve-key keys of one worker's status log may share the answer, but an
+# answer that names two or more captain-held tasks is refused and nothing is
+# sent. Answer each held task with its own send.
 # This is what lets an answer reach a decision that has already been
 # transferred from the live status log to its durable captain-held task, which
 # the status ledger alone can no longer close.
@@ -562,6 +567,7 @@ RESOLVE_STATUS_FILE=
 # longer owns also keeps the common path free of any backlog read.
 RESOLVE_STATUS_KEYS=
 RESOLVE_HOLD_KEYS=
+RESOLVE_ANSWER_EVENT=
 RESOLVE_CLOSE_MAX=$FM_LINE_CAP_DEFAULT
 
 # Resolve a --resolve-key key that the status log no longer owns to the
@@ -583,6 +589,16 @@ fm_send_hold_resolved_id() { # <task-id> <decision-key>
     return 0
   done
   return 1
+}
+
+# The keyed lines one send feeds the keyed-answer intake: each captain-held
+# task this answer closes, all under the send's one answer event.
+fm_send_resolved_hold_lines() { # <answer-text>
+  local note=$1 k
+  note=$(printf '%s' "$note" | tr '\n\r\t' '   ' | LC_ALL=C tr -d '\000-\037\177')
+  for k in $RESOLVE_HOLD_KEYS; do
+    printf '%s\t%s\t\t\t%s\n' "$k" "$note" "$RESOLVE_ANSWER_EVENT"
+  done
 }
 
 # Close-note body for --resolve-key. Ordinary keys keep answered: <excerpt>.
@@ -686,6 +702,17 @@ if [ -n "$RESOLVE_KEYS" ]; then
       exit 1
     fi
   done
+  # One send is ONE captain answer, so every captain-held task it closes shares
+  # one answer event. The keyed-answer intake owns the binding rule; its
+  # preflight refuses an answer mapped to several held tasks before delivery.
+  if [ -n "$RESOLVE_HOLD_KEYS" ]; then
+    RESOLVE_ANSWER_EVENT="fm-send-$(date +%s)-$$-$RANDOM"
+    if ! preflight_out=$(fm_send_resolved_hold_lines "$*" | "$SCRIPT_DIR/fm-captain-hold.sh" answers --check \
+      --source "a firstmate answer sent to $RESOLVE_TASK_ID" 2>&1); then
+      echo "error: --resolve-key cannot close captain-held task(s) ${RESOLVE_HOLD_KEYS} with this one answer: $(printf '%s' "$preflight_out" | tr '\n' ' ')- send a separate answer for each captain-held task; nothing was sent." >&2
+      exit 1
+    fi
+  fi
 fi
 
 # Close each answered decision in this home's ledger, only after the answer is
@@ -735,13 +762,8 @@ fm_send_close_resolved_keys() { # <answer-text>
 # it does not build a decision record or choose a close path; the keys were
 # already resolved to task ids above, so the intake needs no legacy origin.
 fm_send_feed_resolved_holds() { # <answer-text>
-  local note=$1 k lines=''
   [ -n "$RESOLVE_HOLD_KEYS" ] || return 0
-  note=$(printf '%s' "$note" | tr '\n\r\t' '   ' | LC_ALL=C tr -d '\000-\037\177')
-  for k in $RESOLVE_HOLD_KEYS; do
-    lines="${lines}${k}"$'\t'"${note}"$'\t'$'\n'
-  done
-  if ! printf '%s' "$lines" | "$SCRIPT_DIR/fm-captain-hold.sh" answers \
+  if ! fm_send_resolved_hold_lines "$1" | "$SCRIPT_DIR/fm-captain-hold.sh" answers \
     --source "a firstmate answer sent to $RESOLVE_TASK_ID" >/dev/null 2>&1; then
     echo "error: the answer was delivered to $T, but this captain-held task could not be closed: ${RESOLVE_HOLD_KEYS}. Close it with fm-captain-hold.sh answer - do not resend the answer." >&2
     return 1

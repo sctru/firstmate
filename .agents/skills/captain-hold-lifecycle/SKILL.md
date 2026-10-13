@@ -31,6 +31,13 @@ Only `answer` with the captain's words or an evidence-backed `reconcile close` m
 Never close anything the captain owns without recording what he actually said: `bin/fm-captain-hold.sh answer` writes his exact words into the task and closes a question-shaped call, while `--release` frees a captain-gated work item to proceed.
 A merge approval uses that existing release path because approval permits the merge to proceed; cleanup closes the work only after it lands and records what shipped.
 Closing a held row at merge approval instead records completion before landing, so the backlog claims completion before the work actually ships.
+One captain answer resolves exactly one task.
+Pass `answer --event-id` naming the message or card the answer came from, and give each held task its own answer and event id, even when two answers have the same words.
+When one reply addresses several held tasks, record only the part that clearly answers each task, and ask the captain about any task the reply does not clearly settle.
+Check each command's exit status before you continue; a pipeline that hides a refusal, or a final `echo done`, is not proof that the answer was recorded.
+When `answer` refuses a changed answer because the task is already closed, the closed task keeps its recorded answer: hold a new follow-up task that names the old one, then record the new answer there.
+Record a note on a task only through a typed operation of `bin/fm-tasks-axi.sh` or this owner, never through a raw edit of the backlog file with `sed`, a script, or an editor, and never as a fallback after a typed refusal.
+If no typed operation can append the note, record it in a new follow-up task.
 When the answer changes what a task must build, follow `AGENTS.md` section 7's mid-task ask rule to preserve the captain's words in the brief and steer the worker.
 When the captain says "later", that is an answer too: re-hold with `bin/fm-captain-hold.sh hold <id> --reason "<reason>" --until <date>` so the item leaves the live Captain's Call and resurfaces on its date, instead of leaving a live-looking card or fabricating a closure.
 "A keyed answer resolves its matching captain-held task" is one capability with one owner, `bin/fm-captain-hold.sh answers`, and every channel that carries a captain answer feeds it the same task id and answer; a channel never maps keys to tasks, records a decision, or resolves anything itself.
