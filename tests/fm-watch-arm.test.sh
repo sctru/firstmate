@@ -1279,6 +1279,88 @@ test_take_over_preserves_downtime_from_watcher_self_exit() {
   pass "watch-arm: takeover preserves self-exit downtime and surfaces a recovery wake"
 }
 
+# A watcher the takeover stops can take several seconds to exit: bash 3.2 holds
+# TERM until a running command substitution's child exits, such as a remote
+# second mate probe. Hold the downtime-marker lock so the stopped watcher's own
+# cleanup keeps it alive past five seconds after TERM. That stop is the
+# takeover's own, not downtime: the acknowledged episode must come back, and
+# the fresh cycle must not resurface it.
+test_take_over_waits_out_a_slow_stop_without_reopening_recovery() {
+  local dir home state fakebin owner watcher armout real_rm holder i
+  dir=$(make_case take-over-slow-stop)
+  home="$dir/home"
+  mkdir -p "$home"
+  state="$dir/state"
+  fakebin="$dir/fakebin"
+  armout="$dir/arm.out"
+  FM_WATCHER_CLEANUP_LOCK_BOUND=60 start_rearm_arm "$home" "$state" "$fakebin" "$dir/owner.out" "$$"
+  owner=$ARM_PID
+  watcher=$(cat "$state/.watch.lock/pid")
+  append_wake "$state" signal take-over "signal: fixture handled by main"
+  ack_wakes "$state" >/dev/null || fail "fixture: could not acknowledge wake"
+  case "$(cat "$state/.watcher-down")" in acked:*) ;; *) fail "fixture: the episode was not acknowledged" ;; esac
+  real_rm=$(command -v rm)
+  # Only the taking arm gets this shim: it pauses after the handover snapshot
+  # releases the queue lock, before the stop, so the marker lock can be taken.
+  mkdir -p "$dir/barrier-bin"
+  printf '#!/usr/bin/env bash\n"%s" "$@"\n' "$real_rm" > "$dir/barrier-bin/rm"
+  printf 'if [ "$*" = "-f %s/.wake-queue.lock" ]; then\n' "$state" >> "$dir/barrier-bin/rm"
+  printf '  touch "%s/snapshot-read"\n  for ((i=0; i<700; i++)); do\n    [ -e "%s/release" ] && break\n    sleep 0.05\n  done\nfi\n' "$dir" "$dir" >> "$dir/barrier-bin/rm"
+  chmod +x "$dir/barrier-bin/rm"
+  PATH="$dir/barrier-bin:$fakebin:$PATH" FM_HOME="$home" FM_STATE_OVERRIDE="$state" \
+    FM_POLL=1 FM_SIGNAL_GRACE=0 FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 \
+    FM_ARM_CONFIRM_TIMEOUT="$REARM_CONFIRM_SECONDS" \
+    "$WATCH_ARM" --take-over "$owner" > "$armout" &
+  ARM_PID=$!
+  i=0
+  while [ "$i" -lt 200 ] && [ ! -e "$dir/snapshot-read" ]; do
+    sleep 0.05
+    i=$((i + 1))
+  done
+  [ -e "$dir/snapshot-read" ] || fail "takeover never reached its snapshot"
+  FM_STATE_OVERRIDE="$state" bash -c '
+    . "$1"
+    fm_lock_acquire_wait "$2/.watcher-down.lock" || exit 1
+    touch "$3/marker-held"
+    sleep 8
+    fm_lock_release "$2/.watcher-down.lock"
+  ' _ "$ROOT/bin/fm-wake-lib.sh" "$state" "$dir" &
+  holder=$!
+  i=0
+  while [ "$i" -lt 200 ] && [ ! -e "$dir/marker-held" ]; do
+    sleep 0.05
+    i=$((i + 1))
+  done
+  [ -e "$dir/marker-held" ] || fail "fixture: could not hold the downtime-marker lock"
+  touch "$dir/release"
+  i=0
+  while [ "$i" -lt "$REARM_REPORT_POLLS" ]; do
+    grep -qE '^watcher: (started|attached) pid=|^watcher: FAILED' "$armout" && ! is_live_non_zombie "$watcher" && break
+    is_live_non_zombie "$ARM_PID" || break
+    sleep 0.05
+    i=$((i + 1))
+  done
+  wait "$holder" 2>/dev/null || true
+  wait_for_exit "$owner" "$REARM_EXIT_POLLS" >/dev/null 2>&1 || true
+  ! is_live_non_zombie "$watcher" || fail "the stopped watcher did not exit"
+  grep -q "arm_pid=$owner	watcher_pid=$watcher.*signal=TERM" "$state/.watch-cycle-exits.log" \
+    || fail "fixture: the stopped watcher did not end by TERM: $(cat "$state/.watch-cycle-exits.log")"
+  grep -q '^watcher: started pid=' "$armout" \
+    || fail "a slow stop left the takeover without its own cycle: $(cat "$armout")"
+  sleep 3
+  is_live_non_zombie "$ARM_PID" || fail "the taken-over cycle closed with no new work: $(cat "$armout")"
+  ! grep -q '^check: rearm-resurface' "$armout" || fail "a slow takeover stop resurfaced as recovery"
+  case "$(cat "$state/.watcher-down" 2>/dev/null)" in
+    acked:*) ;;
+    *) fail "a slow takeover stop opened a downtime episode: $(cat "$state/.watcher-down" 2>/dev/null)" ;;
+  esac
+  grep -q 'reason=taken-over	.*successor=started:' "$state/.watch-cycle-exits.log" \
+    || fail "the lifecycle ledger does not record the slow stop as a takeover: $(cat "$state/.watch-cycle-exits.log")"
+  kill -TERM "$ARM_PID" 2>/dev/null || true
+  wait_for_exit "$ARM_PID" 50 >/dev/null 2>&1 || true
+  pass "watch-arm: --take-over waits out a slow stop without reopening an acknowledged episode"
+}
+
 test_downtime_marker_does_not_follow_symlink() {
   local dir home state fakebin armout watcher_pid sentinel
   dir=$(make_case downtime-marker-symlink)
@@ -1758,4 +1840,5 @@ test_handling_delivered_rejects_a_superseded_generation
 test_take_over_attaches_to_a_cycle_the_named_arm_does_not_own
 test_take_over_owns_a_fresh_cycle_and_keeps_queued_work_surfacing
 test_take_over_preserves_downtime_from_watcher_self_exit
+test_take_over_waits_out_a_slow_stop_without_reopening_recovery
 test_opencode_arm_plugin_decides_with_the_shared_predicate
