@@ -2032,7 +2032,7 @@ write_response "$RESPONSE" rule_2 0.99
 TYPESAFE_API_KEY=$KEY run code out err "$BRIEF" --project pager
 expect_code 0 "$code" "shared-quota unmet profile floor exits 0"
 assert_contains "$out" '  status: clear' "shared-quota unmet profile floor status"
-assert_contains "$out" "  profile: --harness 'codex' --model 'gpt-5.6-sol'" "shared-quota unmet profile floor picks the floored profile first in declared order"
+assert_contains "$out" "  profile: --harness 'codex' --model 'gpt-6.1-sol'" "shared-quota unmet profile floor picks the floored profile first in declared order"
 assert_not_contains "$out" 'not eligible' "shared-quota unmet profile floor marks no candidate ineligible"
 assert_contains "$out" 'quota ranking off: home declares a single shared quota' "unmet profile floor candidates state quota ranking is off"
 assert_absent "$LOG/quota-axi.calls" "shared-quota unmet profile floor never reads quota-axi"
