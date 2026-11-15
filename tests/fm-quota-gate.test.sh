@@ -228,8 +228,15 @@ case "$*" in
 esac
 case "${1:-}" in
   display-message) printf 'firstmate\n'; exit 0 ;;
-  list-windows) exit 0 ;;
-  has-session|new-session|new-window|send-keys|set-window-option) exit 0 ;;
+  # The spawn requires the task window to be absent before new-window and present
+  # before it sends keys, so list-windows names it only once new-window ran.
+  list-windows)
+    if [ -n "${FM_FAKE_WINDOW_NAME:-}" ] && [ -e "${FM_FAKE_PANE_PATH:-/nonexistent}.window" ]; then
+      printf '%s\n' "$FM_FAKE_WINDOW_NAME"
+    fi
+    exit 0 ;;
+  new-window) : > "${FM_FAKE_PANE_PATH:-/dev/null}.window"; exit 0 ;;
+  has-session|new-session|send-keys|set-window-option) exit 0 ;;
 esac
 exit 0
 SH
@@ -268,7 +275,7 @@ run_spawn() {
       "FM_ROOT_OVERRIDE=" "FM_HOME=$home" \
       "FM_STATE_OVERRIDE=$home/state" "FM_DATA_OVERRIDE=$home/data" \
       "FM_PROJECTS_OVERRIDE=$home/projects" "FM_CONFIG_OVERRIDE=$home/config" \
-      "FM_SPAWN_NO_GUARD=1" "FM_FAKE_PANE_PATH=$pane" "TMUX=fake,1,0" \
+      "FM_SPAWN_NO_GUARD=1" "FM_FAKE_PANE_PATH=$pane" "FM_FAKE_WINDOW_NAME=fm-$id" "TMUX=fake,1,0" \
       "PATH=$fakebin:$PATH" "$@" \
       "$SPAWN" "$id" "$proj" "${extra[@]}" ) 2>&1
 }

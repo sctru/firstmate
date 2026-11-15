@@ -67,8 +67,15 @@ case "${1:-}" in
     exit 0
     ;;
   display-message) printf 'firstmate\n'; exit 0 ;;
-  list-windows) exit 0 ;;
-  has-session|new-session|new-window|kill-window) exit 0 ;;
+  # The spawn requires the task window to be absent before new-window and present
+  # before it sends keys, so list-windows names it only once new-window ran.
+  list-windows)
+    if [ -n "${FM_FAKE_WINDOW_NAME:-}" ] && [ -e "${FM_FAKE_CAPTURE_COUNTFILE:-/nonexistent}.window" ]; then
+      printf '%s\n' "$FM_FAKE_WINDOW_NAME"
+    fi
+    exit 0 ;;
+  new-window) : > "${FM_FAKE_CAPTURE_COUNTFILE:-/dev/null}.window"; exit 0 ;;
+  has-session|new-session|kill-window) exit 0 ;;
 esac
 exit 0
 SH
@@ -125,6 +132,7 @@ run_trust_spawn() {
     GROK_HOME="$HOME_DIR/grok-home" \
     FM_SPAWN_NO_GUARD=1 TMUX="fake,1,0" \
     FM_FAKE_PANE_PATH="$WT_DIR" \
+    FM_FAKE_WINDOW_NAME="fm-$id" \
     FM_FAKE_CAPTURE_COUNTFILE="$COUNTFILE" \
     FM_FAKE_CAPTURE_DIALOG_CALLS="$dialog_calls" \
     FM_FAKE_CAPTURE_DIALOG_TEXT="$dialog_text" \
